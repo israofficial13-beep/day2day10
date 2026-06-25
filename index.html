@@ -1,0 +1,2355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DAY2DAY - Authentic Kerala Cuisine | Vennikkulam</title>
+    <!-- Tailwind CSS for high-fidelity responsive layout rendering -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts integration for standard high-contrast typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            scroll-behavior: smooth;
+        }
+        .gradient-bg { 
+            background: linear-gradient(135deg, #f0fdf4 0%, #fef3c7 100%); 
+        }
+        /* Elegant custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+        .input-error {
+            border-color: #ef4444 !important;
+            animation: shake 0.2s ease-in-out 2;
+            background-color: #fef2f2 !important;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 0.4; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        .pulsate-beacon {
+            animation: pulse-ring 2s infinite ease-in-out;
+        }
+    </style>
+    <script>
+        // High-reliability local data persistence helper wrappers (defined early to prevent race conditions)
+        window.saveData = function(key, value) {
+            try {
+                const serialized = typeof value === 'object' ? JSON.stringify(value) : value;
+                localStorage.setItem(`day2day_pta_${key}`, serialized);
+            } catch (e) {
+                console.error(`Error saving key "${key}" to local storage:`, e);
+            }
+        };
+
+        window.loadData = function(key, isObject = false) {
+            try {
+                const raw = localStorage.getItem(`day2day_pta_${key}`);
+                if (raw === null) return null;
+                return isObject ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn(`LocalStorage load parse failed for key "${key}", clearing corrupted backup:`, e);
+                localStorage.removeItem(`day2day_pta_${key}`);
+                return null;
+            }
+        };
+
+        // Early helper to check if item has rice characteristics
+        window.checkIsRiceItem = function(item) {
+            if (!item || !item.displayName) return false;
+            const name = item.displayName.toLowerCase();
+            return name.includes('mandhi') || name.includes('madhooth') || name.includes('rice') || name.includes('biryani') || name.includes('madfoona') || name.includes('alfahm');
+        };
+
+        // Static default menu configurations
+        const defaultMenuItems = [
+            { id: 1, displayName: "Vellayappam", price: "₹7", category: "main", desc: "Soft, spongy traditional fermented rice pancake.", available: true },
+            { id: 2, displayName: "Pathiri", price: "₹6", category: "main", desc: "Thin, soft rice flour flatbread.", available: true },
+            { id: 3, displayName: "Porotta", price: "₹10", category: "main", desc: "Flaky layered traditional flatbread.", available: true },
+            { id: 4, displayName: "Kuzhi Mandhi", price: "₹190", category: "main", desc: "Traditional delicious slow-cooked rice cooked with rich Travancore spice blends. Price represents Quarter portion.", available: true },
+            { id: 5, displayName: "Palappam", price: "₹6", category: "main", desc: "Crispy-edged, soft-centered sweet coconut milk pancake.", available: true },
+            { id: 6, displayName: "Madhooth", price: "₹200", category: "main", desc: "Authentic Arabian slow-cooked flavorful spiced rice dish. Price represents Quarter portion.", available: true },
+            { id: 7, displayName: "Madfoona Mandhi", price: "₹210", category: "main", desc: "Authentic spice-buried slow tender cooked chicken and rice. Price represents Quarter portion.", available: true },
+            { id: 8, displayName: "Alfahm", price: "₹120", category: "main", desc: "Juicy charcoal grilled chicken marinated in Arabian spices. Available in Normal, Kanthari, or Peri Peri. Price represents Quarter portion.", available: true }
+        ];
+
+        // Instantly pre-load cache from local storage before rendering to eliminate flash of empty states
+        window.menuItems = window.loadData('menuItems', true) || [...defaultMenuItems];
+        window.orders = window.loadData('orders', true) || [];
+        if (!Array.isArray(window.orders)) window.orders = [];
+    </script>
+</head>
+<body class="bg-gray-50 text-gray-900 flex flex-col min-h-screen">
+
+    <!-- Custom Notification Toast -->
+    <div id="toast" class="fixed top-5 right-5 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl z-50 transform translate-y-[-100px] opacity-0 transition-all duration-300 pointer-events-none flex items-center gap-3">
+        <span id="toast-icon" class="font-bold text-lg">✓</span>
+        <span id="toast-message" class="font-medium">Notification message here</span>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="bg-white shadow-md sticky top-0 z-50 border-b-4 border-green-600" id="app-nav">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div class="flex items-center gap-3">
+                <!-- Secret trigger: Double-clicking the logo/title opens the admin login modal securely -->
+                <button ondblclick="openLoginModal()" title="Double click for Staff Admin Portal" class="text-3xl font-extrabold tracking-tight flex items-baseline focus:outline-none">
+                    <span class="text-red-600">DAY</span><span class="text-yellow-500">2</span><span class="text-green-600">DAY</span> <span class="text-xs text-red-600 font-semibold ml-2">Vennikkulam</span>
+                </button>
+                <!-- Cloud Status Dot Indicator -->
+                <span id="db-status" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-yellow-100 text-yellow-800 transition-all duration-300">
+                    <span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span> Connecting to Cloud...
+                </span>
+            </div>
+            <div class="space-x-2 md:space-x-4 flex items-center font-medium text-sm sm:text-base">
+                <button id="nav-home" onclick="showView('home')" class="px-3 py-1.5 md:px-4 md:py-2 rounded-full text-green-700 hover:text-red-600 transition duration-300 font-bold bg-green-50">Home</button>
+                <button id="nav-menu" onclick="showView('menu')" class="px-3 py-1.5 md:px-4 md:py-2 rounded-full text-green-700 hover:text-red-600 transition duration-300 font-bold">Menu</button>
+                <!-- Hidden POS Cockpit/Login Trigger as requested. Kept hidden securely so users cannot see or click it -->
+                <button id="nav-admin-btn" onclick="openLoginModal()" class="hidden text-green-700 font-bold hover:text-red-600 border border-green-600 px-3 py-1.5 md:px-4 md:py-1.5 rounded-full transition duration-300 relative flex items-center gap-1.5">
+                    <span>POS Cockpit</span>
+                    <span id="nav-order-badge" class="bg-red-600 text-white text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center hidden animate-bounce font-extrabold px-1">0</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Kitchen Closed Banner Notice -->
+    <div id="kitchen-closed-banner" class="bg-red-600 text-white text-center py-3.5 px-4 font-black text-xs md:text-sm hidden sticky top-[120px] sm:top-[76px] z-40 shadow-md">
+        ⚠️ THE KITCHEN IS TEMPORARILY CLOSED. ONLINE ORDERS ARE PAUSED AT THE MOMENT.
+    </div>
+
+    <!-- OWNER LOGIN MODAL -->
+    <div id="login-modal" class="fixed inset-0 bg-black bg-opacity-65 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl relative">
+            <button onclick="closeLoginModal()" class="absolute top-4 right-4 text-gray-400 hover:text-red-600 text-2xl font-bold">&times;</button>
+            
+            <div class="text-center mb-6">
+                <span class="text-4xl">🔐</span>
+                <h3 class="text-2xl font-bold text-green-800 mt-2">Staff & Owner Portal</h3>
+                <p class="text-gray-555 text-sm mt-1">Enter PIN to access Multi-Device POS Cockpit</p>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Passcode PIN</label>
+                    <input type="password" id="login-password" onkeydown="if(event.key === 'Enter') verifyAdminPassword()" placeholder="••••" class="w-full border bg-gray-50 rounded-xl px-4 py-3 text-center text-lg focus:bg-white focus:border-green-600 focus:outline-none tracking-widest">
+                </div>
+                <div id="login-error" class="text-red-600 text-xs font-semibold text-center hidden">Incorrect passcode. Try again!</div>
+                
+                <button onclick="verifyAdminPassword()" class="w-full bg-green-600 hover:bg-green-700 text-white py-3.5 rounded-xl font-bold transition shadow-md">
+                    Access System Dashboards
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HOME VIEW -->
+    <div id="home-view" class="view-section flex-grow">
+        <header class="py-20 md:py-28 gradient-bg text-center relative overflow-hidden">
+            <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#15803d_1px,transparent_1px)] [background-size:16px_16px]"></div>
+            <div class="max-w-4xl mx-auto px-4 relative z-10">
+                <span class="bg-red-100 text-red-700 font-bold px-4 py-1.5 rounded-full text-sm uppercase tracking-wider inline-block">Now in Vennikkulam</span>
+                <h2 class="text-4xl md:text-6xl font-extrabold my-6 text-green-900 leading-tight">Taste of Kerala, <span class="text-red-600 block md:inline">Every Day.</span></h2>
+                <p class="text-lg md:text-xl text-gray-700 mb-10 max-w-2xl mx-auto leading-relaxed">From our hot tawa directly to your table — experience the authentic rich spices and delicious traditions of Kerala, crafted with pure passion.</p>
+                <!-- Only 'Explore Customer Menu' button is kept here; Staff POS button has been completely removed -->
+                <div class="flex justify-center">
+                    <button onclick="showView('menu')" class="bg-yellow-400 hover:bg-yellow-500 text-green-950 px-12 py-4.5 rounded-full font-extrabold text-lg transition duration-300 shadow-xl border-2 border-yellow-600 transform hover:scale-105 animate-bounce">Explore Our Menu</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Highlights Section -->
+        <section class="py-20 max-w-6xl mx-auto px-4 text-center">
+            <h3 class="text-3xl md:text-4xl font-bold text-green-800 mb-3">Why Dine With Us?</h3>
+            <p class="text-gray-555 max-w-2xl mx-auto mb-14">We bring authentic Malabar and Travancore culinary magic straight to the heart of Vennikkulam.</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="p-8 bg-white rounded-3xl shadow-sm border border-gray-100 hover:shadow-xl transition duration-300 transform hover:-translate-y-1">
+                    <div class="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-4xl">🔥</div>
+                    <h4 class="text-2xl font-bold mb-3 text-gray-800">Fresh from the Tawa</h4>
+                    <p class="text-gray-600 leading-relaxed">Every soft Vellayappam, thin Pathiri, and flaky Porotta is prepared scalding hot to your exact order.</p>
+                </div>
+                <div class="p-8 bg-white rounded-3xl shadow-sm border border-gray-100 hover:shadow-xl transition duration-300 transform hover:-translate-y-1">
+                    <div class="w-16 h-16 bg-yellow-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-4xl">🌶️</div>
+                    <h4 class="text-2xl font-bold mb-3 text-gray-800">Genuine Hand-Ground Spices</h4>
+                    <p class="text-gray-600 leading-relaxed">Fresh spices ground in-house cooked slowly to deliver rich, traditional Malabari & Travancore flavors.</p>
+                </div>
+                <div class="p-8 bg-white rounded-3xl shadow-sm border border-gray-100 hover:shadow-xl transition duration-300 transform hover:-translate-y-1">
+                    <div class="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-4xl">🏠</div>
+                    <h4 class="text-2xl font-bold mb-3 text-gray-800">True Home Recipes</h4>
+                    <p class="text-gray-600 leading-relaxed">Classic dishes prepared using slow traditional family methods passed down through generations.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- MENU VIEW -->
+    <div id="menu-view" class="view-section flex-grow hidden">
+        <section class="py-12 max-w-6xl mx-auto px-4">
+            <div class="text-center max-w-3xl mx-auto mb-10">
+                <h3 class="text-3xl md:text-5xl font-extrabold mb-4 text-green-900">Our <span class="text-red-600">Authentic</span> Kerala Menu</h3>
+                <p class="text-gray-600 font-medium text-base md:text-lg">Select a category below or search for a dish. Tap any item to choose your portion and place your live order.</p>
+            </div>
+            
+            <!-- Category Filtering & Search Section -->
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-8 bg-white p-4 rounded-2xl shadow-sm border">
+                <div class="flex flex-wrap gap-2 w-full md:w-auto justify-center">
+                    <button onclick="filterMenu('all')" id="cat-all" class="cat-btn px-4 py-2 rounded-full font-bold text-sm bg-green-700 text-white transition">All Items</button>
+                    <button onclick="filterMenu('main')" id="cat-main" class="cat-btn px-4 py-2 rounded-full font-bold text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition">Main Course</button>
+                    <button onclick="filterMenu('appetizer')" id="cat-appetizer" class="cat-btn px-4 py-2 rounded-full font-bold text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition">Snacks & Starters</button>
+                    <button onclick="filterMenu('drink')" id="cat-drink" class="cat-btn px-4 py-2 rounded-full font-bold text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition">Beverages</button>
+                </div>
+                <div class="relative w-full md:w-64">
+                    <input type="text" id="menu-search" oninput="handleMenuSearch()" placeholder="Search dishes..." class="w-full pl-10 pr-4 py-2 text-sm rounded-xl border focus:outline-none focus:border-green-600 bg-gray-50 focus:bg-white transition">
+                    <span class="absolute left-3.5 top-2.5 text-gray-400 text-sm">🔍</span>
+                </div>
+            </div>
+            
+            <!-- Dynamic Grid -->
+            <div id="menu-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Loaded dynamically by Javascript -->
+            </div>
+        </section>
+    </div>
+
+    <!-- ADMIN VIEW (Owner Dashboard / POS Center) -->
+    <div id="admin-view" class="view-section hidden py-10 max-w-6xl mx-auto px-4 flex-grow">
+        <!-- Interactive Owner Dashboard Header -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b pb-6">
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="text-3xl">👩‍🍳</span>
+                    <h2 class="text-3xl font-extrabold text-green-950">Owner Dashboard</h2>
+                </div>
+                <p class="text-gray-555 text-sm mt-1">Real-time order processing, menu editing, stock availability, sales history, and kitchen configurations</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="logoutAdmin()" class="bg-gray-150 hover:bg-gray-200 text-gray-800 px-6 py-2.5 rounded-full font-bold transition flex items-center gap-2 text-sm border">
+                    <span>←</span> Exit Dashboard
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard Tabs (Matching image) -->
+        <div class="flex border-b border-gray-200 mb-8 overflow-x-auto gap-2 text-sm md:text-base">
+            <button onclick="showAdminTab('orders')" id="tab-orders-btn" class="px-6 py-3 font-bold border-b-4 border-green-600 text-green-700 flex items-center gap-2 whitespace-nowrap">
+                Live Orders Queue <span id="dashboard-order-badge" class="bg-red-600 text-white text-xs px-2.5 py-0.5 rounded-full font-black">0</span>
+            </button>
+            <button onclick="showAdminTab('menu-edit')" id="tab-menu-edit-btn" class="px-6 py-3 font-bold text-gray-500 hover:text-green-700 transition whitespace-nowrap">
+                Manage Menu Items & Stock
+            </button>
+            <button onclick="showAdminTab('history')" id="tab-history-btn" class="px-6 py-3 font-bold text-gray-500 hover:text-green-700 transition whitespace-nowrap">
+                Sales & History Log
+            </button>
+            <button onclick="showAdminTab('qr-generator')" id="tab-qr-generator-btn" class="px-6 py-3 font-bold text-gray-500 hover:text-green-700 transition whitespace-nowrap">
+                Generate Customer QR Codes 📱
+            </button>
+            <button onclick="showAdminTab('settings')" id="tab-settings-btn" class="px-6 py-3 font-bold text-gray-500 hover:text-green-700 transition whitespace-nowrap">
+                Kitchen Control & Safety
+            </button>
+        </div>
+
+        <!-- ========================================== -->
+        <!--  TAB 1: LIVE ORDERS KANBAN (3 COLUMNS)      -->
+        <!-- ========================================== -->
+        <div id="tab-orders" class="admin-tab">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- PENDING / NEW ORDERS (Amber Theme) -->
+                <div class="bg-amber-50/60 p-5 rounded-2xl border border-amber-200 shadow-sm">
+                    <div class="flex justify-between items-center mb-4 pb-2 border-b border-amber-200">
+                        <span class="font-bold text-amber-800 uppercase text-xs tracking-wider flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span> NEW ORDERS
+                        </span>
+                        <span id="count-pending" class="bg-amber-200 text-amber-900 text-xs px-2.5 py-0.5 rounded-full font-bold">0</span>
+                    </div>
+                    <div id="orders-pending-container" class="space-y-4 max-h-[600px] overflow-y-auto pr-1">
+                        <!-- Pending order cards loaded dynamically -->
+                    </div>
+                </div>
+
+                <!-- PREPARING / IN KITCHEN (Blue Theme) -->
+                <div class="bg-blue-50/60 p-5 rounded-2xl border border-blue-200 shadow-sm">
+                    <div class="flex justify-between items-center mb-4 pb-2 border-b border-blue-200">
+                        <span class="font-bold text-blue-800 uppercase text-xs tracking-wider flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-blue-500 animate-spin"></span> IN KITCHEN (PREPARING)
+                        </span>
+                        <span id="count-preparing" class="bg-blue-200 text-blue-900 text-xs px-2.5 py-0.5 rounded-full font-bold">0</span>
+                    </div>
+                    <div id="orders-preparing-container" class="space-y-4 max-h-[600px] overflow-y-auto pr-1">
+                        <!-- Preparing order cards loaded dynamically -->
+                    </div>
+                </div>
+
+                <!-- COMPLETED & SERVED (Green Theme) -->
+                <div class="bg-green-50/60 p-5 rounded-2xl border border-green-200 shadow-sm">
+                    <div class="flex justify-between items-center mb-4 pb-2 border-b border-green-200">
+                        <span class="font-bold text-green-800 uppercase text-xs tracking-wider flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span> COMPLETED & SERVED
+                        </span>
+                        <span id="count-completed" class="bg-green-200 text-green-900 text-xs px-2.5 py-0.5 rounded-full font-bold">0</span>
+                    </div>
+                    <div id="orders-completed-container" class="space-y-4 max-h-[600px] overflow-y-auto pr-1">
+                        <!-- Completed order cards loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!--  TAB 2: MANAGE MENU ITEMS & STOCK          -->
+        <!-- ========================================== -->
+        <div id="tab-menu-edit" class="admin-tab hidden space-y-8">
+            <!-- Add New Item module -->
+            <div class="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-150 max-w-3xl mx-auto">
+                <div class="flex items-center gap-3 mb-6">
+                    <span class="text-3xl">🍲</span>
+                    <div>
+                        <h3 class="text-2xl font-bold text-gray-850">Add New Food Item</h3>
+                        <p class="text-sm text-gray-550">Insert a brand new culinary specialty into your restaurant's digital menu (Image-Free design with live stock defaults)</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Display Name / Title</label>
+                        <input type="text" id="add-food-name" placeholder="e.g. Kozhi Pidi" class="w-full border rounded-xl px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none bg-gray-50 focus:bg-white transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Price (Base / Quarter portion)</label>
+                        <input type="text" id="add-food-price" placeholder="e.g. ₹150" value="₹" class="w-full border rounded-xl px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none bg-gray-50 focus:bg-white transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Category</label>
+                        <select id="add-food-category" class="w-full border rounded-xl px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none bg-gray-50 focus:bg-white transition">
+                            <option value="main">Main Course</option>
+                            <option value="appetizer">Snack / Appetizer</option>
+                            <option value="drink">Beverage / Drink</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Short Description</label>
+                        <input type="text" id="add-food-desc" placeholder="Briefly describe the taste and key ingredients..." class="w-full border rounded-xl px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none bg-gray-50 focus:bg-white transition">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end">
+                    <button onclick="addFoodItem()" class="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold px-8 py-3.5 rounded-full text-sm transition shadow-lg flex items-center justify-center gap-2">
+                        <span>＋ Add to Digital Menu</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-150 max-w-4xl mx-auto">
+                <h3 class="text-2xl font-bold text-gray-800 mb-2">Edit Current Menu, Prices & Stock Status</h3>
+                <p class="mb-6 text-sm text-gray-550">Update pricing details, toggle availability states on the fly, or delete items permanently.</p>
+                <div id="admin-menu-list" class="space-y-4"></div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!--  TAB 3: SALES & HISTORY LOG                -->
+        <!-- ========================================== -->
+        <div id="tab-history" class="admin-tab hidden space-y-6">
+            <!-- Loaded dynamically with analytics & past logs table -->
+        </div>
+
+        <!-- ========================================== -->
+        <!--  TAB 4: CUSTOMER QR CODES GENERATOR         -->
+        <!-- ========================================== -->
+        <div id="tab-qr-generator" class="admin-tab hidden">
+            <!-- QR layout populated by script -->
+        </div>
+
+        <!-- ========================================== -->
+        <!--  TAB 5: KITCHEN CONTROL & SAFETY            -->
+        <!-- ========================================== -->
+        <div id="tab-settings" class="admin-tab hidden">
+            <!-- Settings panel populated by script -->
+        </div>
+    </div>
+
+    <!-- INVOICE/BILL PRINT RECEIPT MODAL -->
+    <div id="receipt-modal" class="fixed inset-0 bg-black bg-opacity-70 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl space-y-6 relative border" id="printable-receipt-card">
+            <button onclick="closeReceiptModal()" class="absolute top-4 right-4 text-gray-400 hover:text-red-600 text-2xl font-bold no-print">&times;</button>
+            <div class="text-center pb-4 border-b border-dashed border-gray-300">
+                <h4 class="text-xl font-black text-green-800 uppercase">DAY 2 DAY RESTAURANT</h4>
+                <p class="text-xs text-gray-550 mt-1">Opposite Church, Vennikkulam, Kerala</p>
+                <p class="text-[10px] text-gray-400">Phone: +91 90611 70906</p>
+            </div>
+            <div class="space-y-2 text-xs">
+                <div class="flex justify-between">
+                    <span class="text-gray-550">Ticket ID:</span>
+                    <span class="font-bold text-gray-800" id="receipt-ticket-id">#TKT-1234</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-555">Customer Name:</span>
+                    <span class="font-bold text-gray-800" id="receipt-customer-name">Anandu</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-555">Dine Type:</span>
+                    <span class="font-bold text-gray-800" id="receipt-dine-type">Dine-In</span>
+                </div>
+                <div id="receipt-contact-row" class="hidden">
+                    <div class="flex justify-between text-red-650">
+                        <span>Phone / Collection:</span>
+                        <span class="font-bold" id="receipt-phone">N/A</span>
+                    </div>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-555">Date/Time:</span>
+                    <span class="font-bold text-gray-800" id="receipt-time">2:10 PM</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-555">Status:</span>
+                    <span class="font-bold uppercase text-green-700" id="receipt-status">Served</span>
+                </div>
+            </div>
+            <div class="border-b border-t border-dashed border-gray-300 py-3 space-y-2">
+                <!-- Grouped list of receipt items will be rendered dynamically here -->
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="font-black text-base text-gray-800">Grand Total:</span>
+                <span class="text-2xl font-black text-red-600" id="receipt-grand-total">₹190</span>
+            </div>
+            <div class="text-center text-[10px] text-gray-400 italic">
+                Thank you! Visit us again soon.
+            </div>
+            <div class="flex gap-2 no-print pt-2">
+                <button onclick="window.print()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-full text-xs shadow-md transition">
+                    Print Receipt 🖨️
+                </button>
+                <button onclick="closeReceiptModal()" class="w-1/2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-full text-xs transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Address and Contact Section -->
+    <section id="contact" class="bg-green-900 text-white py-16 border-t-8 border-yellow-400">
+        <div class="max-w-6xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-12">
+            <div>
+                <h4 class="text-2xl font-bold mb-4"><span class="text-red-500">DAY</span><span class="text-yellow-400">2</span><span class="text-green-400">DAY</span> <span class="text-white">Restaurant</span></h4>
+                <p class="text-gray-200 mb-4 leading-relaxed font-light">Bringing you the real rich flavors of Malabar and Central Travancore directly to Pathanamthitta. Prepared fresh upon order, served bubbling hot.</p>
+                <p class="text-yellow-400 font-bold italic">"From our hot tawa directly to your table"</p>
+            </div>
+            <div>
+                <h4 class="text-2xl font-bold mb-4 text-yellow-400">Our Location</h4>
+                <address class="not-italic text-gray-200 space-y-2">
+                    <p class="font-bold text-white text-lg">DAY2DAY Restaurant</p>
+                    <p>Opposite Church, Main Road</p>
+                    <p>Vennikkulam, Kerala - 689544</p>
+                </address>
+            </div>
+            <div>
+                <h4 class="text-2xl font-bold mb-4 text-yellow-400">Get in Touch</h4>
+                <p class="text-gray-200">📞 Phone: <a href="tel:+919061170906" class="text-white hover:underline font-semibold">+91 90611 70906</a></p>
+                <p class="text-gray-200 mt-2">✉️ Email: <span class="text-white">info@day2daypta.com</span></p>
+                <div class="mt-6 pt-4 border-t border-green-800">
+                    <span class="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded-full uppercase tracking-wider">Open Daily: 7:00 AM - 10:30 PM</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer Copyright -->
+    <footer id="app-footer" class="bg-green-950 text-gray-400 py-6 text-center text-xs md:text-sm border-t border-green-900">
+        <p>&copy; 2026 <span class="text-red-500 font-semibold">DAY</span><span class="text-yellow-500 font-semibold">2</span><span class="text-green-500 font-semibold">DAY</span> Vennikkulam. All Rights Reserved. Crafted with authentic tradition.</p>
+    </footer>
+
+    <!-- Food Item Detail / Placement Modal -->
+    <div id="item-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl max-w-lg w-full overflow-hidden relative shadow-2xl my-8 transform transition-transform duration-300">
+            <button onclick="closeModal()" class="absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-700 hover:text-red-600 w-10 h-10 rounded-full flex items-center justify-center text-2xl font-bold shadow-md z-10 focus:outline-none">&times;</button>
+            
+            <div class="p-6 md:p-8 space-y-6 pt-12">
+                <div class="border-b pb-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span id="modal-badge-emoji" class="text-3xl">🍲</span>
+                        <span id="modal-badge-cat" class="text-xs bg-green-100 text-green-800 font-bold px-3 py-1 rounded-full uppercase tracking-wide">Main Course</span>
+                    </div>
+                    <h4 id="modal-name" class="text-3xl font-extrabold text-green-800 mb-1"></h4>
+                    <p id="modal-price" class="text-2xl font-black text-red-600"></p>
+                    <p id="modal-desc" class="text-gray-600 text-sm mt-3 leading-relaxed"></p>
+                </div>
+
+                <!-- Order Customizations Form -->
+                <div class="bg-gray-50 p-5 rounded-2xl space-y-4 border border-gray-200">
+                    <span class="font-bold text-xs text-gray-400 uppercase tracking-wider block">Customize and Order</span>
+                    
+                    <!-- Dine Type Select -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Dining Type</label>
+                        <div class="grid grid-cols-2 gap-2 bg-gray-100 p-1 rounded-xl">
+                            <button onclick="setOrderDineType('dine_in')" id="dine-type-in" class="py-2 rounded-lg font-bold text-xs transition duration-200 text-center bg-white text-green-700 shadow-sm">Dine-In</button>
+                            <button onclick="setOrderDineType('take_away')" id="dine-type-out" class="py-2 rounded-lg font-bold text-xs transition duration-200 text-center text-gray-600 hover:bg-gray-200/50">Take Away</button>
+                        </div>
+                    </div>
+
+                    <!-- Customer Name / Table Identifier -->
+                    <div id="form-group-name">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Your Name</label>
+                        <input type="text" id="order-table" placeholder="Enter your name" oninput="this.classList.remove('input-error')" class="w-full border bg-white rounded-xl px-3 py-2.5 text-sm focus:border-green-600 focus:outline-none">
+                    </div>
+
+                    <!-- Table Number Dynamic Input -->
+                    <div id="form-group-table">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Table Number</label>
+                        <input type="text" id="order-table-num" placeholder="e.g. Table 5" class="w-full border bg-white rounded-xl px-3 py-2.5 text-sm focus:border-green-600 focus:outline-none">
+                    </div>
+
+                    <!-- Contact details revealed for Take Away -->
+                    <div id="form-group-takeaway" class="hidden space-y-3">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Phone Number</label>
+                            <input type="tel" id="order-phone" placeholder="e.g. +91 XXXXX XXXXX" class="w-full border bg-white rounded-xl px-3 py-2.5 text-sm focus:border-green-600 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Collection Address / Details</label>
+                            <input type="text" id="order-address" placeholder="Address for delivery/parcel label" class="w-full border bg-white rounded-xl px-3 py-2.5 text-sm focus:border-green-600 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <!-- Quantity / Portion control container -->
+                    <div id="quantity-control-container">
+                        <!-- Standard Quantity Controls OR Portion segmented buttons loaded by JS -->
+                    </div>
+
+                    <!-- Special Requests Notes -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Special Instructions (Optional)</label>
+                        <input type="text" id="order-notes" placeholder="e.g. Less spicy, Extra lemons, Serve hot..." class="w-full border bg-white rounded-xl px-3 py-2 text-sm focus:border-green-600 focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <button id="submit-order-btn" onclick="submitOrder()" class="w-full bg-green-600 text-white py-4 rounded-full font-bold hover:bg-green-700 transition shadow-lg text-lg flex items-center justify-center gap-2 transform active:scale-95">
+                        <span>Place Order</span>
+                        <span id="modal-order-total" class="bg-green-800 text-white text-xs px-3 py-1 rounded-full font-black">₹0</span>
+                    </button>
+                    <button onclick="closeModal()" class="w-full text-gray-500 font-bold text-sm text-center py-2 hover:text-red-600 transition">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Order success modal -->
+    <div id="success-modal" class="fixed inset-0 bg-black bg-opacity-70 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-sm w-full text-center space-y-6 shadow-2xl">
+            <div class="w-20 h-20 bg-green-100 text-green-600 text-5xl rounded-full flex items-center justify-center mx-auto">✓</div>
+            <div>
+                <h4 class="text-2xl font-bold text-green-800">Order Placed!</h4>
+                <p class="text-gray-555 text-sm mt-1">Our live kitchen has received your ticket and is preparing it hot!</p>
+            </div>
+            <button onclick="closeSuccessModal()" class="w-full bg-green-600 text-white py-3 rounded-full font-bold hover:bg-green-700 transition">Awesome</button>
+        </div>
+    </div>
+
+    <!-- Custom Delete Confirmation Modal -->
+    <div id="delete-confirm-modal" class="fixed inset-0 bg-black bg-opacity-65 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl relative text-center space-y-6">
+            <div class="w-16 h-16 bg-red-100 text-red-600 text-3xl rounded-full flex items-center justify-center mx-auto">⚠️</div>
+            <div>
+                <h3 class="text-2xl font-bold text-gray-800">Delete Menu Item?</h3>
+                <p class="text-gray-555 text-sm mt-2">Are you sure you want to permanently delete <strong id="delete-item-name" class="text-red-650"></strong> from the digital menu?</p>
+            </div>
+            <div class="flex gap-4">
+                <button onclick="closeDeleteModal()" class="w-1/2 bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 rounded-full font-bold transition">Cancel</button>
+                <button onclick="executeDeleteFoodItem()" class="w-1/2 bg-red-600 hover:bg-red-700 text-white py-3 rounded-full font-bold transition shadow-md">Yes, Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!--  PART 3: REAL-TIME FIRESTORE DATA ENGINES  -->
+    <!-- ========================================== -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getFirestore, doc, setDoc, onSnapshot, collection, initializeFirestore, persistentLocalCache, persistentMultipleTabManager
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // Firebase Web Config setup falling back gracefully if not defined by host environments
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "AIzaSyAsYourActualApiKeyGoesHere-ExampleOnly",
+            authDomain: "day2day-vennikulam.firebaseapp.com",
+            projectId: "day2day-vennikulam",
+            storageBucket: "day2day-vennikulam.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:a1b2c3d4e5f6g7h8i9j0"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = initializeFirestore(app, {
+            localCache: persistentLocalCache({
+                tabManager: persistentMultipleTabManager()
+            })
+        });
+
+        // Global properties linked back on the window objects
+        window.orders = [];
+        window.menuItems = [];
+        window.isKitchenOpen = true;
+        window.isAlertSoundEnabled = true;
+        window.isWhatsAppDispatchEnabled = false;
+        window.adminPassword = '8590';
+        window.syncRoomId = localStorage.getItem('syncRoomId') || 'DAY2DAY-PTA-8590';
+        window.appId = typeof __app_id !== 'undefined' ? __app_id : 'day2day-kerala-pos';
+
+        const defaultMenuItems = [
+            { id: 1, displayName: "Vellayappam", price: "₹7", category: "main", desc: "Soft, spongy traditional fermented rice pancake.", available: true },
+            { id: 2, displayName: "Pathiri", price: "₹6", category: "main", desc: "Thin, soft rice flour flatbread.", available: true },
+            { id: 3, displayName: "Porotta", price: "₹10", category: "main", desc: "Flaky layered traditional flatbread.", available: true },
+            { id: 4, displayName: "Kuzhi Mandhi", price: "₹190", category: "main", desc: "Traditional delicious slow-cooked rice cooked with rich Travancore spice blends. Price represents Quarter portion.", available: true },
+            { id: 5, displayName: "Palappam", price: "₹6", category: "main", desc: "Crispy-edged, soft-centered sweet coconut milk pancake.", available: true },
+            { id: 6, displayName: "Madhooth", price: "₹200", category: "main", desc: "Authentic Arabian slow-cooked flavorful spiced rice dish. Price represents Quarter portion.", available: true },
+            { id: 7, displayName: "Madfoona Mandhi", price: "₹210", category: "main", desc: "Authentic spice-buried slow tender cooked chicken and rice. Price represents Quarter portion.", available: true },
+            { id: 8, displayName: "Alfahm", price: "₹120", category: "main", desc: "Juicy charcoal grilled chicken marinated in Arabian spices. Available in Normal, Kanthari, or Peri Peri. Price represents Quarter portion.", available: true }
+        ];
+
+        let firebaseUser = null;
+        let isFirstLoadComplete = false;
+
+        // AUTH BEFORE QUERIES - Strict Firebase constraint rule 3
+        const initFirestoreSync = async () => {
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    firebaseUser = user;
+                    setupRealtimeListeners();
+                } else {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        signInWithCustomToken(auth, __initial_auth_token).catch(e => {
+                            console.error("Custom token sign in failed, fallback to anonymous:", e);
+                            signInAnonymously(auth);
+                        });
+                    } else {
+                        signInAnonymously(auth).catch(e => {
+                            console.error("Firestore anonymous entry pass failed:", e);
+                            loadLocalStorageFallback();
+                        });
+                    }
+                }
+            });
+        };
+
+        // Real-Time listeners over public room mappings
+        function setupRealtimeListeners() {
+            if (!firebaseUser) return;
+
+            // STRICT PATH CONSTRAINTS RULE 1: /artifacts/{appId}/public/data/{collectionName}/{documentId}
+            const roomDocRef = doc(db, 'artifacts', window.appId, 'public', 'data', 'restaurant_dataset', 'live_doc');
+
+            onSnapshot(roomDocRef, (snapshot) => {
+                const statusBadge = document.getElementById('db-status');
+                if (statusBadge) {
+                    statusBadge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-800 transition-all duration-300";
+                    statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span> Cloud Active`;
+                }
+
+                if (!snapshot.exists()) {
+                    window.menuItems = [...defaultMenuItems];
+                    window.orders = [];
+                    window.pushDatabaseUpdates();
+                    return;
+                }
+
+                const payload = snapshot.data();
+
+                // 1. Sync Menu Items
+                window.menuItems = Array.isArray(payload.menuItems) ? payload.menuItems : [...defaultMenuItems];
+
+                // 2. Sync Operational Settings
+                if (payload.settings) {
+                    window.isKitchenOpen = payload.settings.isKitchenOpen !== undefined ? payload.settings.isKitchenOpen : true;
+                    window.isAlertSoundEnabled = payload.settings.isAlertSoundEnabled !== undefined ? payload.settings.isAlertSoundEnabled : true;
+                    window.isWhatsAppDispatchEnabled = payload.settings.isWhatsAppDispatchEnabled !== undefined ? payload.settings.isWhatsAppDispatchEnabled : false;
+                    window.adminPassword = payload.settings.adminPassword || '8590';
+                }
+
+                // 3. Sync Order Collections
+                const oldLength = Array.isArray(window.orders) ? window.orders.length : 0;
+                const incomingOrders = Array.isArray(payload.orders) ? payload.orders : [];
+                
+                // Track additions/status shifts to alert correct roles with synths
+                if (isFirstLoadComplete && incomingOrders.length > oldLength) {
+                    window.playChime('new_order');
+                    window.showToast("New order ticket received!", true);
+                } else if (isFirstLoadComplete) {
+                    incomingOrders.forEach(newOrder => {
+                        const oldMatch = window.orders.find(o => o.id === newOrder.id);
+                        if (oldMatch && oldMatch.status !== newOrder.status) {
+                            if (newOrder.status === 'ready') {
+                                window.playChime('ready');
+                                window.showToast(`Order #${newOrder.id} is ready for pickup!`, true);
+                            } else if (newOrder.status === 'served') {
+                                window.playChime('served');
+                                window.showToast(`Order #${newOrder.id} has been served!`, true);
+                            }
+                        }
+                    });
+                }
+
+                window.orders = incomingOrders;
+                isFirstLoadComplete = true;
+
+                // Sync global UI layout states
+                window.updateKitchenClosedBanner();
+                window.updateNavbarOrderBadge();
+                window.updateSettingsTabUI();
+                
+                // Keep Local Storage updated as a real-time, robust offline backup
+                window.saveData('menuItems', window.menuItems);
+                window.saveData('orders', window.orders);
+
+                // Force render loop updates
+                window.renderMenu();
+                window.renderAdminMenuList();
+                window.renderSalesHistory();
+                window.renderActiveRoleDashboards();
+            }, (error) => {
+                console.error("Firestore snap channel drop:", error);
+                const statusBadge = document.getElementById('db-status');
+                if (statusBadge) {
+                    statusBadge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-800 transition-all duration-300";
+                    statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> Offline Mode`;
+                }
+                loadLocalStorageFallback();
+            });
+        }
+
+        function loadLocalStorageFallback() {
+            try {
+                window.menuItems = window.loadData('menuItems', true) || [...defaultMenuItems];
+                window.orders = window.loadData('orders', true) || [];
+                if (!Array.isArray(window.orders)) window.orders = [];
+            } catch(e) {
+                window.menuItems = [...defaultMenuItems];
+                window.orders = [];
+            }
+            window.renderMenu();
+            window.renderAdminMenuList();
+            window.renderSalesHistory();
+            window.renderActiveRoleDashboards();
+            window.updateNavbarOrderBadge();
+            window.updateKitchenClosedBanner();
+        }
+
+        // Push central modifications to firestore root
+        window.pushDatabaseUpdates = async function() {
+            window.saveData('menuItems', window.menuItems);
+            window.saveData('orders', window.orders);
+            window.saveData('settings', {
+                isKitchenOpen: window.isKitchenOpen,
+                isAlertSoundEnabled: window.isAlertSoundEnabled,
+                isWhatsAppDispatchEnabled: window.isWhatsAppDispatchEnabled,
+                adminPassword: window.adminPassword
+            });
+
+            if (!firebaseUser) return;
+            try {
+                const roomDocRef = doc(db, 'artifacts', window.appId, 'public', 'data', 'restaurant_dataset', 'live_doc');
+                const updatePayload = {
+                    menuItems: window.menuItems || [],
+                    orders: window.orders || [],
+                    settings: {
+                        isKitchenOpen: window.isKitchenOpen,
+                        isAlertSoundEnabled: window.isAlertSoundEnabled,
+                        isWhatsAppDispatchEnabled: window.isWhatsAppDispatchEnabled,
+                        adminPassword: window.adminPassword
+                    }
+                };
+                await setDoc(roomDocRef, updatePayload, { merge: true });
+            } catch(e) {
+                console.error("Failed writing changes to Firestore Cloud:", e);
+            }
+        };
+
+        // Initialize connection
+        initFirestoreSync();
+    </script>
+
+    <!-- ========================================== -->
+    <!--  PART 4: APP CONTROLLERS & RENDER LOOPS    -->
+    <!-- ========================================== -->
+    <script>
+        // Global State Declarations
+        window.isKitchenOpen = true;
+        window.isAlertSoundEnabled = true;
+        window.isWhatsAppDispatchEnabled = false;
+        window.adminPassword = '8590';
+        window.itemIndexToDelete = null;
+        window.currentMenuFilter = 'all';
+        window.searchString = '';
+        window.orders = [];
+        window.menuItems = [];
+        window.selectedItem = null;
+        window.selectedQty = 1;
+        window.selectedPortion = 'Q'; 
+        window.selectedFlavor = 'Normal'; 
+        window.selectedDineType = 'dine_in'; // dine_in OR take_away
+        window.syncRoomId = localStorage.getItem('syncRoomId') || 'DAY2DAY-PTA-8590';
+        window.activeRole = 'orders'; // POS tab controller fallback
+
+        // Dine type selection state controller inside Item modal
+        window.setOrderDineType = function(type) {
+            window.selectedDineType = type;
+            const btnIn = document.getElementById('dine-type-in');
+            const btnOut = document.getElementById('dine-type-out');
+            const groupTable = document.getElementById('form-group-table');
+            const groupTakeaway = document.getElementById('form-group-takeaway');
+
+            if (type === 'dine_in') {
+                if (btnIn) btnIn.className = "py-2 rounded-lg font-bold text-xs transition duration-200 text-center bg-white text-green-700 shadow-sm";
+                if (btnOut) btnOut.className = "py-2 rounded-lg font-bold text-xs transition duration-200 text-center text-gray-600 hover:bg-gray-200/50";
+                if (groupTable) groupTable.classList.remove('hidden');
+                if (groupTakeaway) groupTakeaway.classList.add('hidden');
+            } else {
+                if (btnIn) btnIn.className = "py-2 rounded-lg font-bold text-xs transition duration-200 text-center text-gray-600 hover:bg-gray-200/50";
+                if (btnOut) btnOut.className = "py-2 rounded-lg font-bold text-xs transition duration-200 text-center bg-white text-green-700 shadow-sm";
+                if (groupTable) groupTable.classList.add('hidden');
+                if (groupTakeaway) groupTakeaway.classList.remove('hidden');
+            }
+        };
+
+        // Relative Time calculator
+        function getRelativeTime(timestamp) {
+            if (!timestamp) return "Just now";
+            const diff = Date.now() - timestamp;
+            const minutes = Math.floor(diff / 60000);
+            
+            if (minutes < 1) return "Just now";
+            if (minutes === 1) return "1 min ago";
+            if (minutes < 60) return `${minutes} mins ago`;
+            
+            const hours = Math.floor(minutes / 60);
+            if (hours === 1) return "1 hour ago";
+            return `${hours} hours ago`;
+        }
+
+        window.updateNavbarOrderBadge = function() {
+            const activeOrders = (window.orders || []).filter(o => o.status === 'pending' || o.status === 'preparing');
+            
+            // Count unique groups
+            const activeKeys = new Set();
+            activeOrders.forEach(o => {
+                activeKeys.add(`${o.table}_${o.status}_${o.dineType}`);
+            });
+            const count = activeKeys.size;
+            
+            const navBadge = document.getElementById('nav-order-badge');
+            
+            if (navBadge) {
+                if (count > 0) {
+                    navBadge.innerText = count;
+                    navBadge.classList.remove('hidden');
+                } else {
+                    navBadge.classList.add('hidden');
+                }
+            }
+
+            const tabBadge = document.getElementById('dashboard-order-badge');
+            if (tabBadge) {
+                tabBadge.innerText = count;
+            }
+        };
+
+        window.updateKitchenClosedBanner = function() {
+            const banner = document.getElementById('kitchen-closed-banner');
+            if (banner) {
+                if (window.isKitchenOpen) {
+                    banner.classList.add('hidden');
+                } else {
+                    banner.classList.remove('hidden');
+                }
+            }
+        };
+
+        // Web Audio Synthesizer order chime
+        window.playChime = function(type = 'new_order') {
+            if (!window.isAlertSoundEnabled) return;
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                const ctx = new AudioContext();
+                
+                const playNote = (freq, startTime, duration) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, startTime);
+                    
+                    gain.gain.setValueAtTime(0.3, startTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+                    
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    
+                    osc.start(startTime);
+                    osc.stop(startTime + duration);
+                };
+                
+                const now = ctx.currentTime;
+                if (type === 'new_order') {
+                    playNote(523.25, now, 0.4); // C5
+                    playNote(659.25, now + 0.15, 0.5); // E5
+                } else if (type === 'ready') {
+                    playNote(587.33, now, 0.35); // D5
+                    playNote(698.46, now + 0.12, 0.4); // F5
+                    playNote(880.00, now + 0.24, 0.55); // A5
+                } else if (type === 'served') {
+                    playNote(659.25, now, 0.2); // E5
+                    playNote(523.25, now + 0.1, 0.3); // C5
+                }
+            } catch (e) {
+                console.warn("Audio blocked by browser context restrictions:", e);
+            }
+        };
+
+        window.showToast = function(message, isSuccess = true) {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toast-icon');
+            const text = document.getElementById('toast-message');
+            if (!toast || !icon || !text) return;
+
+            toast.className = isSuccess 
+                ? "fixed top-5 right-5 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl z-50 transform transition-all duration-300 flex items-center gap-3 animate-pulse" 
+                : "fixed top-5 right-5 bg-red-600 text-white px-6 py-3 rounded-xl shadow-2xl z-50 transform transition-all duration-300 flex items-center gap-3";
+
+            icon.innerText = isSuccess ? "✓" : "⚠️";
+            text.innerText = message;
+
+            toast.style.transform = "translateY(0)";
+            toast.style.opacity = "1";
+
+            setTimeout(() => {
+                toast.style.transform = "translateY(-100px)";
+                toast.style.opacity = "0";
+            }, 3200);
+        };
+
+        window.openLoginModal = function() {
+            if (!document.getElementById('admin-view').classList.contains('hidden')) {
+                showView('admin');
+                return;
+            }
+            const passwordInput = document.getElementById('login-password');
+            if (passwordInput) {
+                passwordInput.value = window.loadData('form_login_pin') || '';
+            }
+            const loginErr = document.getElementById('login-error');
+            if (loginErr) loginErr.classList.add('hidden');
+            
+            const modal = document.getElementById('login-modal');
+            if (modal) modal.classList.remove('hidden');
+            if (passwordInput) passwordInput.focus();
+        };
+
+        window.closeLoginModal = function() {
+            const modal = document.getElementById('login-modal');
+            if (modal) modal.classList.add('hidden');
+        };
+
+        window.verifyAdminPassword = function() {
+            const entered = document.getElementById('login-password').value;
+            if (entered === window.adminPassword) {
+                window.saveData('isAdminLoggedIn', 'true'); // Save login session flag so refresh doesn't log out
+                window.closeLoginModal();
+                window.showView('admin');
+                const lastActiveTab = window.loadData('activeAdminTab') || 'orders';
+                window.showAdminTab(lastActiveTab); 
+                window.showToast("Cockpit dashboard accessed successfully!", true);
+            } else {
+                const loginErr = document.getElementById('login-error');
+                if (loginErr) loginErr.classList.remove('hidden');
+                window.showToast("Incorrect PIN!", false);
+            }
+        };
+
+        window.logoutAdmin = function() {
+            window.saveData('isAdminLoggedIn', 'false'); // Clear login session
+            window.showView('home');
+            window.showToast("POS session closed successfully.", true);
+        };
+
+        window.showView = function(view) {
+            const homeView = document.getElementById('home-view');
+            const menuView = document.getElementById('menu-view');
+            const adminView = document.getElementById('admin-view');
+
+            if (homeView) homeView.classList.add('hidden');
+            if (menuView) menuView.classList.add('hidden');
+            if (adminView) adminView.classList.add('hidden');
+
+            const navHome = document.getElementById('nav-home');
+            const navMenu = document.getElementById('nav-menu');
+            const navAdmin = document.getElementById('nav-admin-btn');
+
+            if (navHome) navHome.classList.remove('bg-green-50', 'text-red-600');
+            if (navMenu) navMenu.classList.remove('bg-green-50', 'text-red-600');
+            if (navAdmin) navAdmin.classList.remove('bg-green-50', 'text-red-600');
+
+            if (view === 'home' && homeView) {
+                homeView.classList.remove('hidden');
+                if (navHome) navHome.classList.add('bg-green-50', 'text-red-600');
+            } else if (view === 'menu' && menuView) {
+                menuView.classList.remove('hidden');
+                if (navMenu) navMenu.classList.add('bg-green-50', 'text-red-600');
+                window.renderMenu();
+            } else if (view === 'admin' && adminView) {
+                adminView.classList.remove('hidden');
+                if (navAdmin) navAdmin.classList.add('bg-green-50', 'text-red-600');
+                window.renderActiveRoleDashboards();
+            }
+            window.saveData('activeView', view);
+            window.scrollTo(0,0);
+        };
+
+        // Module switcher inside the Dashboard layout
+        window.switchRoleDashboard = function(roleKey) {
+            window.showAdminTab(roleKey);
+        };
+
+        // Show specific tabs inside Admin Setup view (Owner Dashboard layout restored as requested)
+        window.showAdminTab = function(tabName) {
+            document.querySelectorAll('.admin-tab').forEach(tab => tab.classList.add('hidden'));
+            const targetTab = document.getElementById('tab-' + tabName);
+            if (targetTab) {
+                targetTab.classList.remove('hidden');
+            }
+
+            const buttons = ['orders', 'menu-edit', 'history', 'qr-generator', 'settings'];
+            buttons.forEach(b => {
+                const btn = document.getElementById(`tab-${b}-btn`);
+                if (!btn) return;
+                if (b === tabName) {
+                    btn.className = "px-6 py-3 font-bold border-b-4 border-green-600 text-green-700 flex items-center gap-2 whitespace-nowrap";
+                } else {
+                    btn.className = "px-6 py-3 font-bold text-gray-500 hover:text-green-700 transition whitespace-nowrap";
+                }
+            });
+
+            window.saveData('activeAdminTab', tabName);
+
+            if (tabName === 'orders') {
+                window.renderActiveRoleDashboards();
+            } else if (tabName === 'menu-edit') {
+                window.renderAdminMenuList();
+            } else if (tabName === 'history') {
+                window.renderSalesHistory();
+            } else if (tabName === 'settings') {
+                window.updateSettingsTabUI();
+            } else if (tabName === 'qr-generator') {
+                window.renderQRGeneratorLayout();
+            }
+        };
+
+        // Render target elements dynamically depending on selected view pointer
+        window.renderActiveRoleDashboards = function() {
+            window.renderOrdersDashboard();
+        };
+
+        // Render User Menu List with availability check
+        window.renderMenu = function() {
+            const grid = document.getElementById('menu-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            let filtered = (window.menuItems || []).filter(item => {
+                if (window.currentMenuFilter !== 'all' && item.category !== window.currentMenuFilter) return false;
+                if (window.searchString && !item.displayName.toLowerCase().includes(window.searchString)) return false;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full py-16 text-center text-gray-500">
+                        <span class="text-5xl block mb-4">🍽️</span>
+                        <p class="text-lg font-bold">No food items match your filter selection.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            filtered.forEach(item => {
+                const categoryColors = {
+                    main: { border: 'border-l-4 border-green-600', bg: 'bg-green-50/50', text: 'text-green-800' },
+                    appetizer: { border: 'border-l-4 border-yellow-500', bg: 'bg-yellow-50/50', text: 'text-yellow-800' },
+                    drink: { border: 'border-l-4 border-blue-500', bg: 'bg-blue-50/50', text: 'text-blue-800' }
+                };
+                const categoryEmojis = { main: '🍛', appetizer: '🍿', drink: '🍹' };
+                const design = categoryColors[item.category] || { border: 'border-l-4 border-gray-400', bg: 'bg-gray-50', text: 'text-gray-800' };
+                const emoji = categoryEmojis[item.category] || '🍲';
+                const readableCategory = item.category === 'main' ? 'Main' : item.category === 'appetizer' ? 'Snack' : 'Beverage';
+
+                // Core Availability styling check
+                const isAvailable = item.available !== false;
+
+                const card = document.createElement('div');
+                
+                // Set structural class names depending on stock levels
+                if (isAvailable) {
+                    card.className = `bg-white rounded-2xl shadow-sm ${design.border} p-6 flex flex-col justify-between hover:shadow-xl transition duration-300 transform hover:-translate-y-1 border border-gray-150 cursor-pointer`;
+                    card.onclick = () => window.openModal(item.id);
+                } else {
+                    card.className = `bg-gray-100 rounded-2xl shadow-sm border-l-4 border-gray-300 p-6 flex flex-col justify-between opacity-60 border border-gray-200 cursor-not-allowed select-none`;
+                    card.onclick = () => window.showToast(`"${item.displayName}" is currently Out of Stock!`, false);
+                }
+                
+                let isRice = window.checkIsRiceItem(item);
+                let suffixPrice = isRice ? ' <span class="text-xs text-gray-400 font-bold block mt-1">(Base / Qtr portion)</span>' : '';
+                
+                const actionButton = isAvailable
+                    ? `<span class="bg-green-600 text-white font-bold px-4 py-2 rounded-full text-xs hover:bg-green-700 transition">Order Hot</span>`
+                    : `<span class="bg-gray-400 text-white font-bold px-4 py-2 rounded-full text-xs cursor-not-allowed">Sold Out</span>`;
+
+                const availabilityBadge = isAvailable
+                    ? ''
+                    : `<span class="bg-red-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded ml-2 uppercase tracking-widest animate-pulse">Sold Out</span>`;
+
+                card.innerHTML = `
+                    <div>
+                        <div class="flex justify-between items-start gap-2">
+                            <span class="${design.bg} ${design.text} text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5">
+                                <span>${emoji}</span> <span class="capitalize font-bold">${readableCategory}</span>
+                            </span>
+                            ${availabilityBadge}
+                        </div>
+                        <h4 class="text-xl font-bold text-green-950 mt-4 mb-2 flex items-center justify-between">
+                            <span>${item.displayName}</span>
+                        </h4>
+                        <p class="text-sm text-gray-550 leading-relaxed min-h-[40px] line-clamp-2">${item.desc}</p>
+                    </div>
+                    <div class="pt-6 border-t border-gray-100 flex justify-between items-center mt-6">
+                        <div>
+                            <span class="text-2xl font-black text-red-600">${item.price}</span>
+                            ${suffixPrice}
+                        </div>
+                        ${actionButton}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        };
+
+        window.filterMenu = function(category) {
+            window.currentMenuFilter = category;
+            window.saveData('currentMenuFilter', category);
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                btn.className = "cat-btn px-4 py-2 rounded-full font-bold text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition";
+            });
+            const filterBtn = document.getElementById(`cat-${category}`);
+            if (filterBtn) {
+                filterBtn.className = "cat-btn px-4 py-2 rounded-full font-bold text-sm bg-green-700 text-white transition";
+            }
+            window.renderMenu();
+        };
+
+        window.handleMenuSearch = function() {
+            const searchEl = document.getElementById('menu-search');
+            if (searchEl) {
+                window.searchString = searchEl.value.toLowerCase().trim();
+                window.renderMenu();
+            }
+        };
+
+        window.openModal = function(id) {
+            window.selectedItem = window.menuItems.find(item => item.id === id);
+            if (!window.selectedItem) return;
+
+            window.selectedQty = parseInt(window.loadData(`form_qty_${id}`)) || 1;
+            window.selectedPortion = window.loadData(`form_portion_${id}`) || 'Q';
+            window.selectedFlavor = window.loadData(`form_flavor_${id}`) || 'Normal';
+            window.selectedDineType = window.loadData(`form_dine_type_${id}`) || 'dine_in';
+            
+            const nameInput = document.getElementById('order-table');
+            if (nameInput) {
+                nameInput.classList.remove('input-error');
+                nameInput.value = window.loadData('form_table_name') || '';
+            }
+
+            const tableNumInput = document.getElementById('order-table-num');
+            if (tableNumInput) {
+                tableNumInput.value = window.loadData('form_table_num') || '';
+            }
+
+            const phoneInput = document.getElementById('order-phone');
+            if (phoneInput) {
+                phoneInput.value = window.loadData('form_phone') || '';
+            }
+
+            const addressInput = document.getElementById('order-address');
+            if (addressInput) {
+                addressInput.value = window.loadData('form_address') || '';
+            }
+
+            const notesInput = document.getElementById('order-notes');
+            if (notesInput) {
+                notesInput.value = window.loadData('form_order_notes') || '';
+            }
+
+            document.getElementById('modal-name').innerText = window.selectedItem.displayName;
+            
+            const isRice = window.checkIsRiceItem(window.selectedItem);
+            const isAlfahm = window.selectedItem.displayName.toLowerCase().includes('alfahm');
+            
+            const modalPriceElem = document.getElementById('modal-price');
+            if (isRice) {
+                modalPriceElem.classList.add('hidden');
+            } else {
+                modalPriceElem.classList.remove('hidden');
+                modalPriceElem.innerText = window.selectedItem.price;
+            }
+            
+            document.getElementById('modal-desc').innerText = window.selectedItem.desc;
+
+            const categoryEmojis = { main: '🍛', appetizer: '🍿', drink: '🍹' };
+            const categoryLabels = { main: 'Main Course', appetizer: 'Snack / Starter', drink: 'Beverage / Drink' };
+            
+            document.getElementById('modal-badge-emoji').innerText = categoryEmojis[window.selectedItem.category] || '🍲';
+            document.getElementById('modal-badge-cat').innerText = categoryLabels[window.selectedItem.category] || 'Special';
+
+            const qtyContainer = document.getElementById('quantity-control-container');
+
+            if (isRice) {
+                let flavorHTML = '';
+                if (isAlfahm) {
+                    flavorHTML = `
+                        <div class="flex flex-col gap-2 mt-4 pt-4 border-t border-gray-200">
+                            <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Select Flavor / Style</span>
+                            <div class="grid grid-cols-3 gap-2 bg-gray-100 p-1.5 rounded-xl border border-gray-250">
+                                <button onclick="setAlfahmFlavor('Normal')" id="flavor-btn-Normal" class="flavor-option-btn py-2.5 rounded-lg font-bold text-xs transition focus:outline-none text-center">Normal</button>
+                                <button onclick="setAlfahmFlavor('Kanthari')" id="flavor-btn-Kanthari" class="flavor-option-btn py-2.5 rounded-lg font-bold text-xs transition focus:outline-none text-center">Kanthari</button>
+                                <button onclick="setAlfahmFlavor('Peri Peri')" id="flavor-btn-Peri" class="flavor-option-btn py-2.5 rounded-lg font-bold text-xs transition focus:outline-none text-center">Peri Peri</button>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                qtyContainer.innerHTML = `
+                    <div class="flex flex-col gap-2">
+                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Select portion size</span>
+                        <div class="grid grid-cols-3 gap-2 bg-gray-100 p-1.5 rounded-xl border border-gray-250">
+                            <button onclick="setRicePortion('Q')" id="portion-btn-Q" class="py-2.5 rounded-lg font-bold text-xs transition focus:outline-none text-center">Quarter (Q)</button>
+                            <button onclick="setRicePortion('H')" id="portion-btn-H" class="py-2.5 rounded-lg font-bold text-xs transition focus:outline-none text-center">Half (H)</button>
+                            <button onclick="setRicePortion('F')" id="portion-btn-F" class="py-2.5 rounded-lg font-bold text-xs transition focus:outline-none text-center">Full (F)</button>
+                        </div>
+                    </div>
+                    ${flavorHTML}
+                `;
+                setRicePortion(window.selectedPortion);
+                if (isAlfahm) {
+                    setTimeout(() => setAlfahmFlavor(window.selectedFlavor), 50);
+                }
+            } else {
+                qtyContainer.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-semibold text-gray-700">Quantity</span>
+                        <div class="flex items-center bg-white border rounded-xl overflow-hidden shadow-sm">
+                            <button onclick="changeQty(-1)" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 font-bold transition focus:outline-none">-</button>
+                            <span id="order-qty" class="px-6 font-bold text-gray-800">1</span>
+                            <button onclick="changeQty(1)" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 font-bold transition focus:outline-none">+</button>
+                        </div>
+                    </div>
+                `;
+                const orderQtyEl = document.getElementById('order-qty');
+                if (orderQtyEl) orderQtyEl.innerText = window.selectedQty;
+                updateModalPrice();
+            }
+
+            // Sync layout inputs based on stored/loaded dining type
+            window.setOrderDineType(window.selectedDineType);
+
+            const modal = document.getElementById('item-modal');
+            if (modal) modal.classList.remove('hidden');
+            document.body.classList.add('overflow-hidden');
+        };
+
+        window.setAlfahmFlavor = function(flavor) {
+            window.selectedFlavor = flavor;
+            if (window.selectedItem) {
+                window.saveData(`form_flavor_${window.selectedItem.id}`, flavor);
+            }
+            const btnN = document.getElementById('flavor-btn-Normal');
+            const btnK = document.getElementById('flavor-btn-Kanthari');
+            const btnP = document.getElementById('flavor-btn-Peri');
+
+            if (!btnN || !btnK || !btnP) return;
+
+            [btnN, btnK, btnP].forEach(btn => {
+                btn.className = "flavor-option-btn py-2.5 rounded-lg font-bold text-xs transition focus:outline-none text-center bg-transparent text-gray-650 hover:bg-gray-200/60";
+            });
+
+            let activeBtn;
+            if (flavor === 'Normal') activeBtn = btnN;
+            if (flavor === 'Kanthari') activeBtn = btnK;
+            if (flavor === 'Peri Peri') activeBtn = btnP;
+
+            if (activeBtn) {
+                activeBtn.className = "flavor-option-btn py-2.5 rounded-lg font-extrabold text-xs transition focus:outline-none text-center bg-red-600 text-white shadow-md";
+            }
+        };
+
+        window.closeModal = function() {
+            const modal = document.getElementById('item-modal');
+            if (modal) modal.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        };
+
+        window.setRicePortion = function(portion) {
+            window.selectedPortion = portion;
+            if (window.selectedItem) {
+                window.saveData(`form_portion_${window.selectedItem.id}`, portion);
+            }
+            const btnQ = document.getElementById('portion-btn-Q');
+            const btnH = document.getElementById('portion-btn-H');
+            const btnF = document.getElementById('portion-btn-F');
+
+            if (!btnQ || !btnH || !btnF) return;
+
+            [btnQ, btnH, btnF].forEach(btn => {
+                btn.className = "py-2.5 rounded-lg font-bold text-xs transition duration-200 text-center bg-transparent text-gray-650 hover:bg-gray-200/60";
+            });
+
+            const activeBtn = document.getElementById(`portion-btn-${portion}`);
+            if (activeBtn) {
+                activeBtn.className = "py-2.5 rounded-lg font-extrabold text-xs transition duration-200 text-center bg-green-600 text-white shadow-md";
+            }
+
+            updateModalPrice();
+        };
+
+        window.changeQty = function(amount) {
+            window.selectedQty += amount;
+            if (window.selectedQty < 1) window.selectedQty = 1;
+            if (window.selectedItem) {
+                window.saveData(`form_qty_${window.selectedItem.id}`, window.selectedQty);
+            }
+            const orderQtyEl = document.getElementById('order-qty');
+            if (orderQtyEl) orderQtyEl.innerText = window.selectedQty;
+            updateModalPrice();
+        };
+
+        function updateModalPrice() {
+            if (!window.selectedItem) return;
+            const rawVal = window.selectedItem.price.replace(/[^\d]/g, '');
+            const rate = parseInt(rawVal, 10) || 0;
+            
+            let calculatedTotal = 0;
+            const isRice = window.checkIsRiceItem(window.selectedItem);
+            
+            if (isRice) {
+                let multiplier = 1;
+                if (window.selectedPortion === 'H') multiplier = 2;
+                if (window.selectedPortion === 'F') multiplier = 4;
+                calculatedTotal = rate * multiplier;
+            } else {
+                calculatedTotal = rate * window.selectedQty;
+            }
+            
+            const totalBadge = document.getElementById('modal-order-total');
+            if (totalBadge) {
+                if (isRice) {
+                    totalBadge.classList.add('hidden');
+                } else {
+                    totalBadge.classList.remove('hidden');
+                    totalBadge.innerText = '₹' + calculatedTotal;
+                }
+            }
+        }
+
+        // Handle order placement & write back updates immediately to DB
+        window.submitOrder = function() {
+            if (!window.selectedItem) {
+                window.showToast("Please choose a food item first!", false);
+                return;
+            }
+
+            if (!window.isKitchenOpen) {
+                window.showToast("The kitchen is currently closed. Online orders are temporarily paused!", false);
+                window.closeModal();
+                return;
+            }
+
+            const nameInput = document.getElementById('order-table');
+            const table = nameInput ? nameInput.value.trim() : "";
+            
+            if (!table) {
+                if (nameInput) {
+                    nameInput.classList.add('input-error');
+                    nameInput.focus();
+                }
+                window.showToast("Please enter customer name!", false);
+                return;
+            }
+
+            // Dine-in or parcel address checks
+            let dineDetailsText = "Take Away / Parcel";
+            let clientAddress = "";
+            let clientPhone = "";
+            
+            if (window.selectedDineType === 'dine_in') {
+                const tableNumInput = document.getElementById('order-table-num');
+                const tableNum = tableNumInput ? tableNumInput.value.trim() : "";
+                if (!tableNum) {
+                    if (tableNumInput) {
+                        tableNumInput.classList.add('input-error');
+                        tableNumInput.focus();
+                    }
+                    window.showToast("Please specify table number for Dine-In!", false);
+                    return;
+                }
+                dineDetailsText = `Dine-In (${tableNum})`;
+            } else {
+                const phoneInput = document.getElementById('order-phone');
+                const addressInput = document.getElementById('order-address');
+                clientPhone = phoneInput ? phoneInput.value.trim() : "";
+                clientAddress = addressInput ? addressInput.value.trim() : "";
+
+                if (!clientPhone) {
+                    if (phoneInput) {
+                        phoneInput.classList.add('input-error');
+                        phoneInput.focus();
+                    }
+                    window.showToast("Please specify contact number for takeaway parcel!", false);
+                    return;
+                }
+            }
+
+            const notes = document.getElementById('order-notes').value;
+            const orderId = 200 + (Array.isArray(window.orders) ? window.orders.length : 0) + Math.floor(Math.random() * 100);
+            
+            const rawVal = window.selectedItem.price.replace(/[^\d]/g, '');
+            const rate = parseInt(rawVal, 10) || 0;
+
+            const isRice = window.checkIsRiceItem(window.selectedItem);
+            const isAlfahm = window.selectedItem.displayName.toLowerCase().includes('alfahm');
+            let totalPriceStr = '';
+            let qtyDisplay = '';
+
+            if (isRice) {
+                let multiplier = 1;
+                if (window.selectedPortion === 'H') multiplier = 2;
+                if (window.selectedPortion === 'F') multiplier = 4;
+                totalPriceStr = `₹${rate * multiplier}`;
+                qtyDisplay = window.selectedPortion;
+            } else {
+                totalPriceStr = `₹${rate * window.selectedQty}`;
+                qtyDisplay = String(window.selectedQty);
+            }
+
+            let finalName = window.selectedItem.displayName;
+            if (isAlfahm && window.selectedFlavor) {
+                finalName += ` (${window.selectedFlavor})`;
+            }
+
+            const now = new Date();
+            let hours = now.getHours();
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; 
+            const timeString = `${hours}:${minutes} ${ampm}`;
+
+            const newTicket = {
+                id: orderId,
+                name: finalName,
+                qty: qtyDisplay,
+                price: totalPriceStr,
+                table: table, // Customer Name
+                dineType: window.selectedDineType,
+                dineDetails: dineDetailsText,
+                phone: clientPhone,
+                address: clientAddress,
+                notes: notes,
+                timestamp: Date.now(),
+                time: timeString,
+                status: "pending",
+                paymentStatus: "unpaid" // default cashier state
+            };
+
+            // Inject record locally & write cloud changes
+            if (!Array.isArray(window.orders)) {
+                window.orders = [];
+            }
+            window.orders.push(newTicket);
+            if (window.pushDatabaseUpdates) {
+                window.pushDatabaseUpdates();
+            }
+
+            // WhatsApp notifications router fallback trigger
+            if (window.isWhatsAppDispatchEnabled) {
+                const kitchenPhone = "919061170906";
+                const portionLabel = isRice 
+                    ? (newTicket.qty === 'Q' ? 'Quarter' : newTicket.qty === 'H' ? 'Half' : 'Full') 
+                    : `${newTicket.qty} Nos`;
+                const textMessage = `*NEW ORDER - DAY2DAY* %0A---------------------------%0A🍛 *Dish:* ${newTicket.name}%0A🔢 *Portion / Qty:* ${portionLabel}%0A💰 *Total:* ${newTicket.price}%0A👤 *Name:* ${newTicket.table}%0A📍 *Type:* ${newTicket.dineDetails}%0A📝 *Notes:* ${newTicket.notes || 'None'}%0A🕒 *Time:* ${newTicket.time}`;
+                window.open(`https://api.whatsapp.com/send?phone=${kitchenPhone}&text=${textMessage}`, '_blank');
+            }
+
+            window.closeModal();
+            const successModal = document.getElementById('success-modal');
+            if (successModal) {
+                successModal.classList.remove('hidden');
+            }
+        };
+
+        window.closeSuccessModal = function() {
+            const successModal = document.getElementById('success-modal');
+            if (successModal) {
+                successModal.classList.add('hidden');
+            }
+        };
+
+        // ==========================================
+        //  RE-BUILD: LIVE ORDERS KANBAN (3 COLUMNS) - Combined Group View
+        // ==========================================
+        window.renderOrdersDashboard = function() {
+            const pendingContainer = document.getElementById('orders-pending-container');
+            const preparingContainer = document.getElementById('orders-preparing-container');
+            const completedContainer = document.getElementById('orders-completed-container');
+
+            if (!pendingContainer || !preparingContainer || !completedContainer) return;
+
+            pendingContainer.innerHTML = '';
+            preparingContainer.innerHTML = '';
+            completedContainer.innerHTML = '';
+
+            let countPending = 0;
+            let countPreparing = 0;
+            let countCompleted = 0;
+
+            const activeOrders = (window.orders || []).filter(o => o.status !== 'archived');
+
+            // Grouping active orders dynamically by Customer Name (`table`), `status`, and `dineType`
+            const groups = {};
+            activeOrders.forEach(order => {
+                const key = `${order.table}_${order.status}_${order.dineType}`;
+                if (!groups[key]) {
+                    groups[key] = {
+                        table: order.table,
+                        dineType: order.dineType,
+                        dineDetails: order.dineDetails,
+                        phone: order.phone,
+                        address: order.address,
+                        status: order.status,
+                        timestamp: order.timestamp,
+                        time: order.time,
+                        paymentStatus: order.paymentStatus,
+                        items: [],
+                        ids: []
+                    };
+                }
+                groups[key].items.push(order);
+                groups[key].ids.push(order.id);
+                // If any single item in this combined order ticket is unpaid, we flag the whole group status as Unpaid
+                if (order.paymentStatus === 'unpaid') {
+                    groups[key].paymentStatus = 'unpaid';
+                }
+            });
+
+            // Convert grouped dictionary map to arrays and order by latest activity
+            const sortedGroups = Object.values(groups).sort((a, b) => b.timestamp - a.timestamp);
+
+            sortedGroups.forEach(group => {
+                const card = document.createElement('div');
+                card.className = "bg-white p-4 rounded-xl border border-gray-150 shadow-sm flex flex-col gap-3 relative hover:shadow-md transition duration-200";
+
+                const elapsedMins = Math.floor((Date.now() - group.timestamp) / 60000);
+                const prepTimeText = elapsedMins < 1 ? 'Just received' : `${elapsedMins} mins elapsed`;
+                const prepColor = elapsedMins >= 15 ? 'text-red-500 font-bold animate-pulse' : 'text-gray-400 font-semibold';
+
+                const isPaid = group.paymentStatus === 'paid';
+                const paymentBadgeClass = isPaid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                const paymentText = isPaid ? 'Paid' : 'Unpaid';
+
+                // Map combined ticket items list details
+                let itemsListHTML = '';
+                let totalGroupPrice = 0;
+                let combinedNotes = [];
+
+                group.items.forEach(item => {
+                    itemsListHTML += `
+                        <div class="flex justify-between items-center text-xs text-gray-700 py-1 border-b border-gray-50 last:border-0">
+                            <span class="font-semibold text-gray-800">${item.name}</span>
+                            <span class="font-bold bg-green-50 text-green-800 px-1.5 py-0.5 rounded border border-green-150 text-[10px]">Qty: ${item.qty}</span>
+                        </div>
+                    `;
+                    const numericPrice = parseInt(item.price.replace(/[^\d]/g, ''), 10) || 0;
+                    totalGroupPrice += numericPrice;
+                    if (item.notes) {
+                        combinedNotes.push(`${item.displayName || item.name}: "${item.notes}"`);
+                    }
+                });
+
+                const notesHTML = combinedNotes.length > 0 
+                    ? `<div class="text-[11px] bg-yellow-50 text-yellow-800 p-2 rounded-lg border border-yellow-100 space-y-0.5">
+                        <strong>💬 Notes:</strong>
+                        <div>${combinedNotes.join('<br>')}</div>
+                       </div>` 
+                    : '';
+
+                const idsJSON = JSON.stringify(group.ids);
+
+                let actionButtonsHTML = '';
+                if (group.status === 'pending') {
+                    actionButtonsHTML = `
+                        <div class="flex gap-1.5 w-full">
+                            <button onclick='window.advanceOrderStatus(${idsJSON}, "preparing")' class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-[11px] shadow-sm transition">
+                                Accept Order 👨‍🍳
+                            </button>
+                        </div>
+                    `;
+                } else if (group.status === 'preparing') {
+                    actionButtonsHTML = `
+                        <div class="flex gap-1.5 w-full">
+                            <button onclick='window.advanceOrderStatus(${idsJSON}, "ready")' class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg text-[11px] shadow-sm transition">
+                                Mark Ready ➔
+                            </button>
+                        </div>
+                    `;
+                } else if (group.status === 'ready') {
+                    actionButtonsHTML = `
+                        <div class="flex gap-1.5 w-full">
+                            <button onclick='window.advanceOrderStatus(${idsJSON}, "completed")' class="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-2 rounded-lg text-[11px] shadow-sm transition">
+                                Mark Served 🏃
+                            </button>
+                        </div>
+                    `;
+                } else if (group.status === 'completed') {
+                    actionButtonsHTML = `
+                        <div class="flex gap-1.5 w-full">
+                            <button onclick='window.advanceOrderStatus(${idsJSON}, "archived")' class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 rounded-lg text-[11px] border transition">
+                                Archive Ticket
+                            </button>
+                        </div>
+                    `;
+                }
+
+                const dineDetailsHTML = group.dineType === 'take_away' 
+                    ? `<div class="text-[10px] text-gray-500 font-medium">📍 Parcel Label: Call ${group.phone} / ${group.address}</div>`
+                    : '';
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <span class="text-[10px] text-gray-400 font-black uppercase tracking-wider">Combined order (${group.items.length} dishes)</span>
+                            <div class="mt-1 space-y-0.5">
+                                ${itemsListHTML}
+                            </div>
+                        </div>
+                        <span class="bg-gray-150 text-gray-700 font-bold text-xs px-2.5 py-1 rounded-full whitespace-nowrap">${group.table}</span>
+                    </div>
+
+                    <div class="flex justify-between items-center text-xs py-1.5 px-2.5 bg-gray-50 rounded-lg">
+                        <span class="text-[10px] bg-green-100 text-green-800 font-black px-2 py-0.5 rounded uppercase">${group.dineDetails}</span>
+                        <span class="font-extrabold text-red-650">Total Bill: ₹${totalGroupPrice}</span>
+                    </div>
+
+                    ${notesHTML}
+                    ${dineDetailsHTML}
+
+                    <div class="flex justify-between items-center border-t pt-2 mt-1">
+                        <button onclick='window.togglePaymentState(${idsJSON})' class="px-2.5 py-0.5 rounded text-[10px] font-bold tracking-wide transition border ${paymentBadgeClass}">
+                            ${paymentText}
+                        </button>
+                        <button onclick='window.openReceiptModal(${idsJSON})' class="text-blue-600 hover:underline text-[11px] font-bold">Print Combined Bill 🖨️</button>
+                    </div>
+
+                    <div class="flex justify-between items-center text-[10px] text-gray-400">
+                        <span class="${prepColor}">⏱️ ${prepTimeText}</span>
+                        <span>🕒 ${group.time}</span>
+                    </div>
+
+                    <div class="pt-1">
+                        ${actionButtonsHTML}
+                    </div>
+                `;
+
+                if (group.status === 'pending') {
+                    pendingContainer.appendChild(card);
+                    countPending++;
+                } else if (group.status === 'preparing') {
+                    preparingContainer.appendChild(card);
+                    countPreparing++;
+                } else if (group.status === 'ready' || group.status === 'completed') {
+                    completedContainer.appendChild(card);
+                    countCompleted++;
+                }
+            });
+
+            // Update column badges counts
+            const pendingBadge = document.getElementById('count-pending');
+            const preparingBadge = document.getElementById('count-preparing');
+            const completedBadge = document.getElementById('count-completed');
+
+            if (pendingBadge) pendingBadge.innerText = countPending;
+            if (preparingBadge) preparingBadge.innerText = countPreparing;
+            if (completedBadge) completedBadge.innerText = countCompleted;
+        };
+
+        // ==========================================
+        //  ADMIN CATALOGS RENDERING (RESTORED FEATS)
+        // ==========================================
+        window.renderAdminMenuList = function() {
+            const list = document.getElementById('admin-menu-list');
+            if (!list) return;
+            list.innerHTML = '';
+
+            (window.menuItems || []).forEach((item, index) => {
+                const categoryEmojis = { main: '🍛', appetizer: '🍿', drink: '🍹' };
+                const emoji = categoryEmojis[item.category] || '🍲';
+                const row = document.createElement('div');
+                row.className = "flex flex-col md:flex-row items-center justify-between p-4 rounded-xl border border-gray-250 gap-4 hover:bg-gray-50 transition";
+                
+                let isRice = window.checkIsRiceItem(item);
+                let priceLabel = isRice ? '<span class="text-[10px] text-gray-400 block font-bold">Base Price (Quarter)</span>' : '';
+
+                const isAvailable = item.available !== false;
+                const toggleBtnClass = isAvailable
+                    ? "bg-green-100 text-green-800 hover:bg-green-200 border border-green-300"
+                    : "bg-red-100 text-red-800 hover:bg-red-200 border border-red-300";
+                const toggleBtnText = isAvailable ? "In Stock 🟢" : "Sold Out 🔴";
+
+                row.innerHTML = `
+                    <div class="flex items-center gap-3 w-full md:w-auto flex-grow">
+                        <span class="text-3xl bg-emerald-50 p-2 rounded-xl border">${emoji}</span>
+                        <div class="flex-grow">
+                            <span class="text-[10px] bg-green-100 text-green-800 font-bold px-2 py-0.5 rounded-full capitalize">${item.category === 'main' ? 'Main Course' : item.category === 'appetizer' ? 'Snack' : 'Beverage'}</span>
+                            <h5 class="font-bold text-gray-800 text-base mt-1">${item.displayName}</h5>
+                            <p class="text-xs text-gray-500 line-clamp-1">${item.desc}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+                        <button onclick="toggleFoodAvailability(${item.id})" class="${toggleBtnClass} text-xs px-3.5 py-2 rounded-lg font-black transition whitespace-nowrap shadow-sm">
+                            ${toggleBtnText}
+                        </button>
+
+                        <div class="flex flex-col items-end">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xs text-gray-400 font-bold">Price:</span>
+                                <input type="text" id="price-edit-${index}" value="${item.price}" class="w-24 border rounded-lg px-2.5 py-1.5 text-center text-sm focus:outline-none focus:border-green-600 font-bold font-mono">
+                            </div>
+                            ${priceLabel}
+                        </div>
+                        <div class="flex gap-1.5">
+                            <button onclick="updateMenuDetails(${index})" class="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 rounded-lg font-bold transition">Save</button>
+                            <button onclick="openDeleteModal(${index})" class="bg-red-50 hover:bg-red-100 text-red-600 text-xs px-3 py-2 rounded-lg font-bold transition">Delete</button>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(row);
+            });
+        };
+
+        // ==========================================
+        //  RECOVERY RENDER RE-INJECTIONS
+        // ==========================================
+        window.renderSalesHistory = function() {
+            const tabHistory = document.getElementById('tab-history');
+            if (!tabHistory) return;
+
+            // Compute ledger analytics details
+            let totalRevenue = 0;
+            let successOrdersCount = 0;
+            let dishCounter = {};
+
+            const historicalOrders = (window.orders || []).filter(order => {
+                return order.status === 'completed' || order.status === 'archived';
+            });
+
+            historicalOrders.forEach(order => {
+                const numericPrice = parseInt(order.price.replace(/[^\d]/g, ''), 10) || 0;
+                totalRevenue += numericPrice;
+                successOrdersCount++;
+                dishCounter[order.name] = (dishCounter[order.name] || 0) + 1;
+            });
+
+            let favoriteFood = "None Yet";
+            let maxCount = 0;
+            for (const [dish, count] of Object.entries(dishCounter)) {
+                if (count > maxCount) {
+                    maxCount = count;
+                    favoriteFood = dish;
+                }
+            }
+
+            const historyFilterText = document.getElementById('history-search') ? document.getElementById('history-search').value.toLowerCase().trim() : '';
+
+            let filteredHistory = historicalOrders.filter(order => {
+                if (!historyFilterText) return true;
+                return order.name.toLowerCase().includes(historyFilterText) || 
+                       order.table.toLowerCase().includes(historyFilterText) || 
+                       String(order.id).includes(historyFilterText);
+            });
+
+            let tableRowsHTML = '';
+            if (filteredHistory.length === 0) {
+                tableRowsHTML = `
+                    <tr>
+                        <td colspan="8" class="p-8 text-center text-gray-400">No past ledger matches found.</td>
+                    </tr>
+                `;
+            } else {
+                filteredHistory.forEach(order => {
+                    const dateObj = order.timestamp ? new Date(order.timestamp) : new Date();
+                    const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + `, ${order.time}`;
+                    let statusColor = order.status === 'archived' ? 'bg-gray-100 text-gray-700' : 'bg-green-100 text-green-800';
+
+                    tableRowsHTML += `
+                        <tr class="hover:bg-gray-50 transition border-b">
+                            <td class="p-4 font-bold text-gray-400">#${order.id}</td>
+                            <td class="p-4 text-gray-655 font-medium">${formattedDate}</td>
+                            <td class="p-4 font-bold text-gray-800">${order.name}</td>
+                            <td class="p-4 font-black"><span class="bg-gray-100 px-2 py-0.5 rounded">${order.qty}</span></td>
+                            <td class="p-4 font-semibold text-gray-700">${order.table}</td>
+                            <td class="p-4 font-extrabold text-red-650">${order.price}</td>
+                            <td class="p-4">
+                                <span class="text-[10px] font-black px-2.5 py-0.5 rounded-full capitalize ${statusColor}">
+                                    ${order.status}
+                                </span>
+                            </td>
+                            <td class="p-4 text-center">
+                                <button onclick="deleteArchivedOrder(${order.id})" class="text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded hover:bg-red-50 transition text-[11px]">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+
+            tabHistory.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                        <span class="text-gray-550 font-bold text-sm uppercase block">Total Revenue</span>
+                        <h4 class="text-3xl font-black text-green-700 mt-2">₹${totalRevenue}</h4>
+                    </div>
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                        <span class="text-gray-550 font-bold text-sm uppercase block">Orders Served</span>
+                        <h4 class="text-3xl font-black text-gray-800 mt-2">${successOrdersCount}</h4>
+                    </div>
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                        <span class="text-gray-550 font-bold text-sm uppercase block">Most Popular Dish</span>
+                        <h4 class="text-2xl font-extrabold text-red-650 mt-2 truncate">${favoriteFood}</h4>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl shadow-md border border-gray-105">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-800">Archived Sales Ledger Log</h3>
+                            <p class="text-xs text-gray-555 mt-0.5">Permanent digital historical registry of all transactions</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2 w-full md:w-auto">
+                            <input type="text" id="history-search" oninput="renderSalesHistory()" value="${historyFilterText}" placeholder="Search past items..." class="px-4 py-2 text-xs border rounded-xl bg-gray-50 focus:bg-white transition w-full md:w-48">
+                            <button onclick="window.print()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-xs border transition flex items-center gap-1">
+                                <span>🖨️</span> Print Report
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 text-gray-500 uppercase tracking-wider border-b">
+                                    <th class="p-4 font-bold">Ticket</th>
+                                    <th class="p-4 font-bold">Time & Date</th>
+                                    <th class="p-4 font-bold">Dish Name</th>
+                                    <th class="p-4 font-bold">Portion/Qty</th>
+                                    <th class="p-4 font-bold">Customer Name</th>
+                                    <th class="p-4 font-bold">Revenue</th>
+                                    <th class="p-4 font-bold">Status</th>
+                                    <th class="p-4 font-bold text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y">${tableRowsHTML}</tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        };
+
+        window.renderQRGeneratorLayout = function() {
+            const qrTab = document.getElementById('tab-qr-generator');
+            if (!qrTab) return;
+            qrTab.innerHTML = `
+                <div class="bg-white p-6 md:p-8 rounded-3xl shadow-xl max-w-2xl mx-auto border space-y-6">
+                    <div class="text-center">
+                        <span class="text-5xl">📱</span>
+                        <h3 class="text-2xl font-bold text-gray-800 mt-3">Scan-To-Order QR Generator</h3>
+                        <p class="text-sm text-gray-550 mt-1">Generate custom scan links for tables. Customers scan and order directly to your dashboard.</p>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Table Identifier</label>
+                            <input type="text" id="qr-table-label" placeholder="e.g., Table 5" class="w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-green-600">
+                        </div>
+                        <button onclick="generateCustomQRCode()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-full transition shadow-md">Generate Live QR</button>
+                    </div>
+                    <div id="qr-result-box" class="hidden text-center border-t pt-6 flex flex-col items-center">
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Your Scan & Order QR Code</p>
+                        <div class="bg-white p-4 rounded-2xl border-2 border-dashed inline-block shadow-sm">
+                            <img id="generated-qr-img" src="" alt="Live QR Code" class="w-48 h-48 mx-auto">
+                        </div>
+                        <p id="qr-link-text" class="text-xs text-gray-500 font-medium mt-3 bg-gray-50 px-3 py-1.5 rounded-full select-all max-w-full truncate break-all"></p>
+                        <div class="flex gap-2 mt-4">
+                            <button onclick="window.open(document.getElementById('generated-qr-img').src, '_blank')" class="text-xs font-bold text-green-700 hover:underline bg-green-50 px-4 py-2 rounded-full">Open Image</button>
+                            <button onclick="copyQRLinkToClipboard()" class="text-xs font-bold text-blue-700 hover:underline bg-blue-50 px-4 py-2 rounded-full">Copy Link</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const tableLabelEl = document.getElementById('qr-table-label');
+            if (tableLabelEl) {
+                tableLabelEl.value = window.loadData('qr_generator_table_label') || '';
+                tableLabelEl.addEventListener('input', () => {
+                    window.saveData('qr_generator_table_label', tableLabelEl.value);
+                });
+            }
+        };
+
+        window.updateSettingsTabUI = function() {
+            const settingsTab = document.getElementById('tab-settings');
+            if (!settingsTab) return;
+
+            const kitchenBtnClass = window.isKitchenOpen ? "bg-green-600 hover:bg-green-700 text-white" : "bg-red-600 hover:bg-red-700 text-white";
+            const soundBtnClass = window.isAlertSoundEnabled ? "bg-green-600 hover:bg-green-700 text-white" : "bg-gray-500 hover:bg-gray-655 text-white";
+            const waBtnClass = window.isWhatsAppDispatchEnabled ? "bg-green-600 hover:bg-green-700 text-white" : "bg-gray-500 hover:bg-gray-655 text-white";
+
+            settingsTab.innerHTML = `
+                <div class="bg-white p-6 md:p-8 rounded-3xl shadow-xl max-w-2xl mx-auto border space-y-8">
+                    <div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-1">Kitchen & Security Control Panel</h3>
+                        <p class="text-sm text-gray-550">Configure client-facing business operations, sync keys, notification sound, and security details.</p>
+                    </div>
+                    
+                    <div class="space-y-6 border-t pt-6">
+                        <!-- Real-Time Sync Key Setting -->
+                        <div class="bg-blue-50 p-5 rounded-2xl border border-blue-200 space-y-3">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xl">📡</span>
+                                <span class="font-bold text-blue-900 block">Real-Time Sync Configuration</span>
+                            </div>
+                            <p class="text-xs text-blue-700 leading-relaxed">
+                                Share the Room ID on other devices to connect Cash Counter, Kitchen and Waiter devices in real-time.
+                            </p>
+                            <div>
+                                <label class="block text-xs font-bold text-blue-800 uppercase mb-1">Sync Room ID</label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="sync-room-id" value="${window.syncRoomId}" class="w-full border rounded-xl px-3 py-2 text-sm focus:border-blue-600 focus:outline-none bg-white font-mono font-bold uppercase tracking-wider">
+                                    <button onclick="updateSyncRoomId()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-2 rounded-xl font-bold transition whitespace-nowrap shadow-md">
+                                        Set Sync Room
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Kitchen Open/Closed Toggle -->
+                        <div class="flex items-center justify-between gap-4 border-t pt-6">
+                            <div>
+                                <span class="font-bold text-gray-800 block">Kitchen Operations Status</span>
+                                <span class="text-xs text-gray-500 block">Turn OFF to temporarily freeze users from placing online tickets.</span>
+                            </div>
+                            <button onclick="toggleKitchenStatus()" id="kitchen-status-btn" class="px-5 py-2.5 rounded-full transition shadow-sm text-xs md:text-sm whitespace-nowrap font-bold ${kitchenBtnClass}">
+                                ${window.isKitchenOpen ? "KITCHEN OPEN" : "KITCHEN CLOSED"}
+                            </button>
+                        </div>
+
+                        <!-- Sound Notifications Toggle -->
+                        <div class="flex items-center justify-between gap-4 border-t pt-6">
+                            <div>
+                                <span class="font-bold text-gray-800 block">Incoming Order Chime Alert</span>
+                                <span class="text-xs text-gray-500 block">Play alert chime sounds when a customer orders or a dish is ready.</span>
+                            </div>
+                            <button onclick="toggleAlertSound()" id="sound-status-btn" class="px-5 py-2.5 rounded-full transition shadow-sm text-xs md:text-sm whitespace-nowrap font-bold ${soundBtnClass}">
+                                ${window.isAlertSoundEnabled ? "ALERT CHIME ACTIVE" : "ALERT CHIME SILENT"}
+                            </button>
+                        </div>
+
+                        <!-- WhatsApp Notification Redirection -->
+                        <div class="flex items-center justify-between gap-4 border-t pt-6">
+                            <div>
+                                <span class="font-bold text-gray-800 block">WhatsApp Order Dispatch</span>
+                                <span class="text-xs text-gray-500 block">Open kitchen WhatsApp thread (+91 90611 70906) automatically on placement.</span>
+                            </div>
+                            <button onclick="toggleWhatsAppDispatch()" id="whatsapp-dispatch-btn" class="px-5 py-2.5 rounded-full transition shadow-sm text-xs md:text-sm whitespace-nowrap font-bold ${waBtnClass}">
+                                ${window.isWhatsAppDispatchEnabled ? "DISPATCH ACTIVE" : "DISPATCH DISABLED"}
+                            </button>
+                        </div>
+
+                        <!-- Security/Password Change Settings -->
+                        <div class="border-t pt-6 space-y-4">
+                            <div>
+                                <span class="font-bold text-gray-800 block">Change Owner PIN</span>
+                                <span class="text-xs text-gray-500">Update the credential required to access dashboard role screens.</span>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">New PIN</label>
+                                    <input type="password" id="new-admin-password" placeholder="Enter new PIN" class="w-full border bg-white rounded-xl px-3 py-2 text-sm focus:border-green-600 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Confirm PIN</label>
+                                    <input type="password" id="confirm-admin-password" placeholder="Confirm new PIN" class="w-full border bg-white rounded-xl px-3 py-2 text-sm focus:border-green-600 focus:outline-none">
+                                </div>
+                            </div>
+                            <button onclick="changeAdminPassword()" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-full transition shadow-sm text-sm">
+                                Update Passcode PIN
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        window.toggleKitchenStatus = function() {
+            window.isKitchenOpen = !window.isKitchenOpen;
+            if (window.pushDatabaseUpdates) window.pushDatabaseUpdates();
+            showToast(window.isKitchenOpen ? "Kitchen is Open!" : "Kitchen Closed.", true);
+        };
+
+        window.toggleAlertSound = function() {
+            window.isAlertSoundEnabled = !window.isAlertSoundEnabled;
+            if (window.pushDatabaseUpdates) window.pushDatabaseUpdates();
+            showToast(window.isAlertSoundEnabled ? "Chime alerts active!" : "Chime muted.", true);
+        };
+
+        window.toggleWhatsAppDispatch = function() {
+            window.isWhatsAppDispatchEnabled = !window.isWhatsAppDispatchEnabled;
+            if (window.pushDatabaseUpdates) window.pushDatabaseUpdates();
+            showToast(window.isWhatsAppDispatchEnabled ? "WhatsApp dispatcher enabled!" : "WhatsApp dispatcher disabled.", true);
+        };
+
+        window.updateSyncRoomId = function() {
+            const syncInput = document.getElementById('sync-room-id');
+            if (syncInput) {
+                const newId = syncInput.value.trim().toUpperCase();
+                if (newId) {
+                    window.syncRoomId = newId;
+                    localStorage.setItem('syncRoomId', newId);
+                    window.appId = newId.toLowerCase();
+                    showToast(`Sync Room ID updated to: ${newId}! Please refresh to re-establish network connection.`, true);
+                }
+            }
+        };
+
+        function changeAdminPassword() {
+            const newPass = document.getElementById('new-admin-password').value.trim();
+            const confirmPass = document.getElementById('confirm-admin-password').value.trim();
+
+            if (!newPass) {
+                showToast("PIN cannot be blank!", false);
+                return;
+            }
+
+            if (newPass !== confirmPass) {
+                showToast("PIN entries do not match!", false);
+                return;
+            }
+
+            window.adminPassword = newPass;
+            if (window.pushDatabaseUpdates) window.pushDatabaseUpdates();
+            document.getElementById('new-admin-password').value = '';
+            document.getElementById('confirm-admin-password').value = '';
+            showToast("Admin passcode PIN updated successfully!", true);
+        }
+
+        window.toggleFoodAvailability = function(id) {
+            const item = window.menuItems.find(i => i.id === id);
+            if (item) {
+                item.available = (item.available === undefined) ? false : !item.available;
+                if (window.pushDatabaseUpdates) window.pushDatabaseUpdates();
+                const availabilityText = item.available ? "In Stock" : "Sold Out";
+                showToast(`"${item.displayName}" status set to: ${availabilityText}!`, true);
+            }
+        };
+
+        window.addFoodItem = function() {
+            const name = document.getElementById('add-food-name').value.trim();
+            let price = document.getElementById('add-food-price').value.trim();
+            const category = document.getElementById('add-food-category').value;
+            const desc = document.getElementById('add-food-desc').value.trim();
+
+            if (!name || !price || !desc) {
+                showToast("Please fill in the food name, price, and descriptive text!", false);
+                return;
+            }
+
+            if (!price.startsWith('₹')) price = '₹' + price;
+
+            const newId = window.menuItems.length > 0 ? Math.max(...window.menuItems.map(item => item.id)) + 1 : 1;
+            const newItem = { id: newId, displayName: name, price: price, category: category, desc: desc, available: true };
+
+            window.menuItems.push(newItem);
+            if (window.pushDatabaseUpdates) {
+                window.pushDatabaseUpdates();
+                showToast(`"${name}" was successfully added to your digital menu!`, true);
+            }
+
+            document.getElementById('add-food-name').value = '';
+            document.getElementById('add-food-price').value = '₹';
+            document.getElementById('add-food-desc').value = '';
+        };
+
+        window.updateMenuDetails = function(index) {
+            const newPrice = document.getElementById(`price-edit-${index}`).value.trim();
+            if (!newPrice) {
+                showToast("Pricing cannot be left blank!", false);
+                return;
+            }
+            const cleanPrice = newPrice.startsWith('₹') ? newPrice : '₹' + newPrice;
+            const item = window.menuItems[index];
+
+            item.price = cleanPrice;
+            if (window.pushDatabaseUpdates) {
+                window.pushDatabaseUpdates();
+                showToast(`Saved changes for ${item.displayName}!`, true);
+            }
+        };
+
+        window.openDeleteModal = function(index) {
+            window.itemIndexToDelete = index;
+            const item = window.menuItems[index];
+            document.getElementById('delete-item-name').innerText = item.displayName;
+            document.getElementById('delete-confirm-modal').classList.remove('hidden');
+        };
+
+        window.closeDeleteModal = function() {
+            document.getElementById('delete-confirm-modal').classList.add('hidden');
+            window.itemIndexToDelete = null;
+        };
+
+        window.executeDeleteFoodItem = function() {
+            if (window.itemIndexToDelete !== null) {
+                const item = window.menuItems[window.itemIndexToDelete];
+                window.menuItems = window.menuItems.filter(i => i.id !== item.id);
+                if (window.pushDatabaseUpdates) {
+                    window.pushDatabaseUpdates();
+                    window.closeDeleteModal();
+                    showToast(`"${item.displayName}" removed.`, true);
+                }
+            }
+        };
+
+        window.deleteArchivedOrder = function(ids) {
+            const idArray = Array.isArray(ids) ? ids : [ids];
+            window.orders = window.orders.filter(item => !idArray.includes(item.id));
+            if (window.pushDatabaseUpdates) window.pushDatabaseUpdates();
+            showToast("Order ticket permanently purged.", true);
+        };
+
+        window.generateCustomQRCode = function() {
+            const rawLabel = document.getElementById('qr-table-label').value.trim();
+            if (!rawLabel) {
+                showToast("Enter table identifier first!", false);
+                return;
+            }
+
+            const currentURL = window.location.href.split('#')[0].split('?')[0];
+            const qrLink = `${currentURL}?table=${encodeURIComponent(rawLabel)}#menu`;
+            const encodedLink = encodeURIComponent(qrLink);
+            const qrAPIUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodedLink}`;
+
+            document.getElementById('generated-qr-img').src = qrAPIUrl;
+            document.getElementById('qr-link-text').innerText = qrLink;
+            document.getElementById('qr-result-box').classList.remove('hidden');
+
+            showToast(`QR generated for: ${rawLabel}`, true);
+        };
+
+        window.copyQRLinkToClipboard = function() {
+            const linkText = document.getElementById('qr-link-text').innerText;
+            if (!linkText) return;
+
+            const el = document.createElement('textarea');
+            el.value = linkText;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+
+            showToast("Copied to clipboard!", true);
+        };
+
+        window.openReceiptModal = function(ids) {
+            const idArray = Array.isArray(ids) ? ids : [ids];
+            const groupOrders = window.orders.filter(o => idArray.includes(o.id));
+            if (groupOrders.length === 0) return;
+
+            const first = groupOrders[0];
+            document.getElementById('receipt-ticket-id').innerText = `#TKT-${first.id}${groupOrders.length > 1 ? '...' : ''}`;
+            document.getElementById('receipt-customer-name').innerText = first.table;
+            document.getElementById('receipt-dine-type').innerText = first.dineDetails;
+            document.getElementById('receipt-time').innerText = first.time;
+            document.getElementById('receipt-status').innerText = first.status;
+
+            // Generate grouped summary for combined receipt
+            let itemsHTML = '';
+            let totalVal = 0;
+
+            groupOrders.forEach(o => {
+                const priceNum = parseInt(o.price.replace(/[^\d]/g, ''), 10) || 0;
+                totalVal += priceNum;
+                itemsHTML += `
+                    <div class="flex justify-between text-xs text-gray-600">
+                        <span>• ${o.name} (${o.qty})</span>
+                        <span>${o.price}</span>
+                    </div>
+                `;
+            });
+
+            // Update item details container inside receipt
+            const receiptSummary = document.getElementById('receipt-item-summary');
+            if (receiptSummary && receiptSummary.parentElement) {
+                const summaryParent = receiptSummary.parentElement.parentElement;
+                summaryParent.innerHTML = `
+                    <div class="flex justify-between text-xs font-bold text-gray-800">
+                        <span>Description / Item</span>
+                        <span>Total Price</span>
+                    </div>
+                    <div class="space-y-1.5 my-2">
+                        ${itemsHTML}
+                    </div>
+                `;
+            }
+
+            document.getElementById('receipt-grand-total').innerText = '₹' + totalVal;
+
+            const phoneRow = document.getElementById('receipt-contact-row');
+            if (first.dineType === 'take_away') {
+                if (phoneRow) phoneRow.classList.remove('hidden');
+                const receiptPhoneEl = document.getElementById('receipt-phone');
+                if (receiptPhoneEl) receiptPhoneEl.innerText = `${first.phone} / ${first.address}`;
+            } else {
+                if (phoneRow) phoneRow.classList.add('hidden');
+            }
+
+            document.getElementById('receipt-modal').classList.remove('hidden');
+        };
+
+        window.closeReceiptModal = function() {
+            document.getElementById('receipt-modal').classList.add('hidden');
+        };
+
+        window.togglePaymentState = function(ids) {
+            const idArray = Array.isArray(ids) ? ids : [ids];
+            const targetOrders = window.orders.filter(o => idArray.includes(o.id));
+            const anyUnpaid = targetOrders.some(o => o.paymentStatus !== 'paid');
+            const nextState = anyUnpaid ? 'paid' : 'unpaid';
+
+            window.orders.forEach(o => {
+                if (idArray.includes(o.id)) {
+                    o.paymentStatus = nextState;
+                }
+            });
+            if (window.pushDatabaseUpdates) window.pushDatabaseUpdates();
+            window.showToast(`Payment status updated to ${nextState}!`, true);
+        };
+
+        // Added the missing advanceOrderStatus function to fix ReferenceError
+        window.advanceOrderStatus = function(ids, status) {
+            const idArray = Array.isArray(ids) ? ids : [ids];
+            window.orders.forEach(o => {
+                if (idArray.includes(o.id)) {
+                    o.status = status;
+                }
+            });
+            if (window.pushDatabaseUpdates) window.pushDatabaseUpdates();
+            window.showToast(`Order status updated to ${status}!`, true);
+        };
+
+        const trackedFormInputs = [
+            { id: 'order-table', storeKey: 'form_table_name' },
+            { id: 'order-notes', storeKey: 'form_order_notes' },
+            { id: 'order-table-num', storeKey: 'form_table_num' },
+            { id: 'order-phone', storeKey: 'form_phone' },
+            { id: 'order-address', storeKey: 'form_address' },
+            { id: 'add-food-name', storeKey: 'form_add_name' },
+            { id: 'add-food-price', storeKey: 'form_add_price' },
+            { id: 'add-food-desc', storeKey: 'form_add_desc' },
+            { id: 'add-food-category', storeKey: 'form_add_category' },
+            { id: 'login-password', storeKey: 'form_login_pin' },
+            { id: 'menu-search', storeKey: 'form_menu_search' }
+        ];
+
+        // Core Input state persistence binder
+        function setupAutosaveEngine() {
+            trackedFormInputs.forEach(({ id, storeKey }) => {
+                const inputEl = document.getElementById(id);
+                if (!inputEl) return;
+
+                const savedVal = window.loadData(storeKey);
+                if (savedVal !== null) {
+                    inputEl.value = savedVal;
+                    if (id === 'menu-search') {
+                        window.searchString = savedVal.toLowerCase().trim();
+                    }
+                }
+
+                inputEl.addEventListener('input', () => {
+                    window.saveData(storeKey, inputEl.value);
+                    if (id === 'menu-search') {
+                        window.handleMenuSearch();
+                    }
+                });
+            });
+        }
+
+        // Main initialization entry block
+        window.addEventListener('DOMContentLoaded', () => {
+            // Restore login session gracefully
+            const isOwnerSessionLoggedIn = window.loadData('isAdminLoggedIn') === 'true';
+            
+            if (isOwnerSessionLoggedIn) {
+                window.showView('admin');
+                const lastActiveTab = window.loadData('activeAdminTab') || 'orders';
+                window.showAdminTab(lastActiveTab);
+            } else {
+                const savedView = window.loadData('activeView') || 'home';
+                window.showView(savedView);
+            }
+
+            const savedMenuFilter = window.loadData('currentMenuFilter') || 'all';
+            window.filterMenu(savedMenuFilter);
+
+            const savedSettings = window.loadData('settings', true);
+            if (savedSettings) {
+                window.isKitchenOpen = savedSettings.isKitchenOpen !== undefined ? savedSettings.isKitchenOpen : true;
+                window.isAlertSoundEnabled = savedSettings.isAlertSoundEnabled !== undefined ? savedSettings.isAlertSoundEnabled : true;
+                window.isWhatsAppDispatchEnabled = savedSettings.isWhatsAppDispatchEnabled !== undefined ? savedSettings.isWhatsAppDispatchEnabled : false;
+                window.adminPassword = savedSettings.adminPassword || '8590';
+            }
+
+            setupAutosaveEngine();
+
+            // Refresh the data silently every 15 seconds to ensure live sync backups
+            setInterval(() => {
+                const lastActiveTab = window.loadData('activeAdminTab') || 'orders';
+                if (lastActiveTab === 'orders' && !document.getElementById('admin-view').classList.contains('hidden')) {
+                    window.renderOrdersDashboard();
+                }
+            }, 15000);
+        });
+    </script>
+</body>
+</html>
