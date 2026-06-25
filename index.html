@@ -8,8 +8,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts integration for standard high-contrast typography -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <!-- Supabase JS Client CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { 
             font-family: 'Inter', sans-serif; 
@@ -54,7 +52,7 @@
         }
     </style>
     <script>
-        // High-reliability local data persistence helper wrappers
+        // High-reliability local data persistence helper wrappers (defined early to prevent race conditions)
         window.saveData = function(key, value) {
             try {
                 const serialized = typeof value === 'object' ? JSON.stringify(value) : value;
@@ -117,9 +115,9 @@
                 <button ondblclick="openLoginModal()" title="Double click for Staff Admin Portal" class="text-3xl font-extrabold tracking-tight flex items-baseline focus:outline-none">
                     <span class="text-red-600">DAY</span><span class="text-yellow-500">2</span><span class="text-green-600">DAY</span> <span class="text-xs text-red-600 font-semibold ml-2">Vennikkulam</span>
                 </button>
-                <!-- Supabase Cloud Status Dot Indicator -->
+                <!-- Cloud Status Dot Indicator -->
                 <span id="db-status" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-yellow-100 text-yellow-800 transition-all duration-300">
-                    <span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span> Connecting to Supabase...
+                    <span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span> Connecting to Cloud...
                 </span>
             </div>
             <div class="space-x-2 md:space-x-4 flex items-center font-medium text-sm sm:text-base">
@@ -172,6 +170,7 @@
                 <span class="bg-red-100 text-red-700 font-bold px-4 py-1.5 rounded-full text-sm uppercase tracking-wider inline-block">Now in Vennikkulam</span>
                 <h2 class="text-4xl md:text-6xl font-extrabold my-6 text-green-900 leading-tight">Taste of Kerala, <span class="text-red-600 block md:inline">Every Day.</span></h2>
                 <p class="text-lg md:text-xl text-gray-700 mb-10 max-w-2xl mx-auto leading-relaxed">From our hot tawa directly to your table — experience the authentic rich spices and delicious traditions of Kerala, crafted with pure passion.</p>
+                <!-- Only 'Explore Customer Menu' button is kept here; Staff POS button has been completely removed -->
                 <div class="flex justify-center">
                     <button onclick="showView('menu')" class="bg-yellow-400 hover:bg-yellow-500 text-green-950 px-12 py-4.5 rounded-full font-extrabold text-lg transition duration-300 shadow-xl border-2 border-yellow-600 transform hover:scale-105 animate-bounce">Explore Our Menu</button>
                 </div>
@@ -240,7 +239,7 @@
                     <span class="text-3xl">👩‍🍳</span>
                     <h2 class="text-3xl font-extrabold text-green-950">Owner Dashboard</h2>
                 </div>
-                <p class="text-gray-555 text-sm mt-1">Real-time order processing, menu editing, stock availability, sales history, and kitchen configurations with Supabase Database Sync</p>
+                <p class="text-gray-555 text-sm mt-1">Real-time order processing, menu editing, stock availability, sales history, and kitchen configurations</p>
             </div>
             <div class="flex gap-3">
                 <button onclick="logoutAdmin()" class="bg-gray-150 hover:bg-gray-200 text-gray-800 px-6 py-2.5 rounded-full font-bold transition flex items-center gap-2 text-sm border">
@@ -264,7 +263,7 @@
                 Generate Customer QR Codes 📱
             </button>
             <button onclick="showAdminTab('settings')" id="tab-settings-btn" class="px-6 py-3 font-bold text-gray-500 hover:text-green-700 transition whitespace-nowrap">
-                Kitchen Control & Supabase Settings ⚙️
+                Kitchen Control & Safety
             </button>
         </div>
 
@@ -378,7 +377,7 @@
         </div>
 
         <!-- ========================================== -->
-        <!--  TAB 5: KITCHEN CONTROL & SUPABASE SETTINGS-->
+        <!--  TAB 5: KITCHEN CONTROL & SAFETY            -->
         <!-- ========================================== -->
         <div id="tab-settings" class="admin-tab hidden">
             <!-- Settings panel populated by script -->
@@ -396,7 +395,7 @@
             </div>
             <div class="space-y-2 text-xs">
                 <div class="flex justify-between">
-                    <span class="text-gray-555">Ticket ID:</span>
+                    <span class="text-gray-550">Ticket ID:</span>
                     <span class="font-bold text-gray-800" id="receipt-ticket-id">#TKT-1234</span>
                 </div>
                 <div class="flex justify-between">
@@ -579,11 +578,34 @@
     </div>
 
     <!-- ========================================== -->
-    <!--  PART 3: REAL-TIME SUPABASE SYNC SYSTEM    -->
+    <!--  PART 3: REAL-TIME FIRESTORE DATA ENGINES  -->
     <!-- ========================================== -->
-    <script>
-        
-        // Globals setup
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getFirestore, doc, setDoc, onSnapshot, collection, initializeFirestore, persistentLocalCache, persistentMultipleTabManager
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // Firebase Web Config setup falling back gracefully if not defined by host environments
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "AIzaSyAsYourActualApiKeyGoesHere-ExampleOnly",
+            authDomain: "day2day-vennikulam.firebaseapp.com",
+            projectId: "day2day-vennikulam",
+            storageBucket: "day2day-vennikulam.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:a1b2c3d4e5f6g7h8i9j0"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = initializeFirestore(app, {
+            localCache: persistentLocalCache({
+                tabManager: persistentMultipleTabManager()
+            })
+        });
+
+        // Global properties linked back on the window objects
         window.orders = [];
         window.menuItems = [];
         window.isKitchenOpen = true;
@@ -591,192 +613,201 @@
         window.isWhatsAppDispatchEnabled = false;
         window.adminPassword = '8590';
         window.syncRoomId = localStorage.getItem('syncRoomId') || 'DAY2DAY-PTA-8590';
+        window.appId = typeof __app_id !== 'undefined' ? __app_id : 'day2day-kerala-pos';
 
-        // Load Supabase Keys from LocalStorage
-        window.supabaseUrl = localStorage.getItem('supabaseUrl') || '';
-        window.supabaseAnonKey = localStorage.getItem('supabaseAnonKey') || '';
-        window.supabaseClient = null;
+        const defaultMenuItems = [
+            { id: 1, displayName: "Vellayappam", price: "₹7", category: "main", desc: "Soft, spongy traditional fermented rice pancake.", available: true },
+            { id: 2, displayName: "Pathiri", price: "₹6", category: "main", desc: "Thin, soft rice flour flatbread.", available: true },
+            { id: 3, displayName: "Porotta", price: "₹10", category: "main", desc: "Flaky layered traditional flatbread.", available: true },
+            { id: 4, displayName: "Kuzhi Mandhi", price: "₹190", category: "main", desc: "Traditional delicious slow-cooked rice cooked with rich Travancore spice blends. Price represents Quarter portion.", available: true },
+            { id: 5, displayName: "Palappam", price: "₹6", category: "main", desc: "Crispy-edged, soft-centered sweet coconut milk pancake.", available: true },
+            { id: 6, displayName: "Madhooth", price: "₹200", category: "main", desc: "Authentic Arabian slow-cooked flavorful spiced rice dish. Price represents Quarter portion.", available: true },
+            { id: 7, displayName: "Madfoona Mandhi", price: "₹210", category: "main", desc: "Authentic spice-buried slow tender cooked chicken and rice. Price represents Quarter portion.", available: true },
+            { id: 8, displayName: "Alfahm", price: "₹120", category: "main", desc: "Juicy charcoal grilled chicken marinated in Arabian spices. Available in Normal, Kanthari, or Peri Peri. Price represents Quarter portion.", available: true }
+        ];
 
-        // Auto initialization
-        function initSupabase() {
-            if (window.supabaseUrl && window.supabaseAnonKey) {
-                try {
-                    window.supabaseClient = supabase.createClient(window.supabaseUrl, window.supabaseAnonKey);
-                    console.log("Supabase Client initialized successfully!");
-                    setupSupabaseSync();
-                } catch (e) {
-                    console.error("Failed to initialize Supabase client:", e);
-                    setOfflineBadge("Config Error");
-                }
-            } else {
-                console.warn("Supabase configuration missing. Operating in local-fallback mode.");
-                setOfflineBadge("Configure Supabase");
-            }
-        }
+        let firebaseUser = null;
+        let isFirstLoadComplete = false;
 
-        function setOfflineBadge(msg = "Offline Mode") {
-            const statusBadge = document.getElementById('db-status');
-            if (statusBadge) {
-                statusBadge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-yellow-100 text-yellow-800 transition-all duration-300";
-                statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span> ${msg}`;
-            }
-        }
-
-        async function setupSupabaseSync() {
-            if (!window.supabaseClient) return;
-
-            const statusBadge = document.getElementById('db-status');
-            if (statusBadge) {
-                statusBadge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-800 transition-all duration-300";
-                statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Cloud Active`;
-            }
-
-            // Fetch initial state
-            try {
-                const { data, error } = await window.supabaseClient
-                    .from('restaurant_sync')
-                    .select('payload')
-                    .eq('id', window.syncRoomId)
-                    .maybeSingle();
-
-                if (error) throw error;
-
-                if (data && data.payload) {
-                    applySyncedPayload(data.payload, false);
+        // AUTH BEFORE QUERIES - Strict Firebase constraint rule 3
+        const initFirestoreSync = async () => {
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    firebaseUser = user;
+                    setupRealtimeListeners();
                 } else {
-                    // Initialize empty row for this room
-                    await window.pushDatabaseUpdates();
-                }
-            } catch (e) {
-                console.error("Initial Supabase read failed, relying on local backup:", e);
-            }
-
-            // Subscribe to real-time updates for this row
-            window.supabaseClient
-                .channel('room-changes')
-                .on(
-                    'postgres_changes',
-                    {
-                        event: 'UPDATE',
-                        schema: 'public',
-                        table: 'restaurant_sync',
-                        filter: `id=eq.${window.syncRoomId}`
-                    },
-                    (payload) => {
-                        if (payload.new && payload.new.payload) {
-                            applySyncedPayload(payload.new.payload, true);
-                        }
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        signInWithCustomToken(auth, __initial_auth_token).catch(e => {
+                            console.error("Custom token sign in failed, fallback to anonymous:", e);
+                            signInAnonymously(auth);
+                        });
+                    } else {
+                        signInAnonymously(auth).catch(e => {
+                            console.error("Firestore anonymous entry pass failed:", e);
+                            loadLocalStorageFallback();
+                        });
                     }
-                )
-                .subscribe();
+                }
+            });
+        };
+
+        // Real-Time listeners over public room mappings
+        function setupRealtimeListeners() {
+            if (!firebaseUser) return;
+
+            // STRICT PATH CONSTRAINTS RULE 1: /artifacts/{appId}/public/data/{collectionName}/{documentId}
+            const roomDocRef = doc(db, 'artifacts', window.appId, 'public', 'data', 'restaurant_dataset', 'live_doc');
+
+            onSnapshot(roomDocRef, (snapshot) => {
+                const statusBadge = document.getElementById('db-status');
+                if (statusBadge) {
+                    statusBadge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-800 transition-all duration-300";
+                    statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span> Cloud Active`;
+                }
+
+                if (!snapshot.exists()) {
+                    window.menuItems = [...defaultMenuItems];
+                    window.orders = [];
+                    window.pushDatabaseUpdates();
+                    return;
+                }
+
+                const payload = snapshot.data();
+
+                // 1. Sync Menu Items
+                window.menuItems = Array.isArray(payload.menuItems) ? payload.menuItems : [...defaultMenuItems];
+
+                // 2. Sync Operational Settings
+                if (payload.settings) {
+                    window.isKitchenOpen = payload.settings.isKitchenOpen !== undefined ? payload.settings.isKitchenOpen : true;
+                    window.isAlertSoundEnabled = payload.settings.isAlertSoundEnabled !== undefined ? payload.settings.isAlertSoundEnabled : true;
+                    window.isWhatsAppDispatchEnabled = payload.settings.isWhatsAppDispatchEnabled !== undefined ? payload.settings.isWhatsAppDispatchEnabled : false;
+                    window.adminPassword = payload.settings.adminPassword || '8590';
+                }
+
+                // 3. Sync Order Collections
+                const oldLength = Array.isArray(window.orders) ? window.orders.length : 0;
+                const incomingOrders = Array.isArray(payload.orders) ? payload.orders : [];
+                
+                // Track additions/status shifts to alert correct roles with synths
+                if (isFirstLoadComplete && incomingOrders.length > oldLength) {
+                    window.playChime('new_order');
+                    window.showToast("New order ticket received!", true);
+                } else if (isFirstLoadComplete) {
+                    incomingOrders.forEach(newOrder => {
+                        const oldMatch = window.orders.find(o => o.id === newOrder.id);
+                        if (oldMatch && oldMatch.status !== newOrder.status) {
+                            if (newOrder.status === 'ready') {
+                                window.playChime('ready');
+                                window.showToast(`Order #${newOrder.id} is ready for pickup!`, true);
+                            } else if (newOrder.status === 'served') {
+                                window.playChime('served');
+                                window.showToast(`Order #${newOrder.id} has been served!`, true);
+                            }
+                        }
+                    });
+                }
+
+                window.orders = incomingOrders;
+                isFirstLoadComplete = true;
+
+                // Sync global UI layout states
+                window.updateKitchenClosedBanner();
+                window.updateNavbarOrderBadge();
+                window.updateSettingsTabUI();
+                
+                // Keep Local Storage updated as a real-time, robust offline backup
+                window.saveData('menuItems', window.menuItems);
+                window.saveData('orders', window.orders);
+
+                // Force render loop updates
+                window.renderMenu();
+                window.renderAdminMenuList();
+                window.renderSalesHistory();
+                window.renderActiveRoleDashboards();
+            }, (error) => {
+                console.error("Firestore snap channel drop:", error);
+                const statusBadge = document.getElementById('db-status');
+                if (statusBadge) {
+                    statusBadge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-800 transition-all duration-300";
+                    statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> Offline Mode`;
+                }
+                loadLocalStorageFallback();
+            });
         }
 
-        function applySyncedPayload(payload, triggerChimes) {
-            // 1. Sync Menu Items
-            window.menuItems = Array.isArray(payload.menuItems) ? payload.menuItems : [...defaultMenuItems];
-
-            // 2. Sync Operational Settings
-            if (payload.settings) {
-                window.isKitchenOpen = payload.settings.isKitchenOpen !== undefined ? payload.settings.isKitchenOpen : true;
-                window.isAlertSoundEnabled = payload.settings.isAlertSoundEnabled !== undefined ? payload.settings.isAlertSoundEnabled : true;
-                window.isWhatsAppDispatchEnabled = payload.settings.isWhatsAppDispatchEnabled !== undefined ? payload.settings.isWhatsAppDispatchEnabled : false;
-                window.adminPassword = payload.settings.adminPassword || '8590';
+        function loadLocalStorageFallback() {
+            try {
+                window.menuItems = window.loadData('menuItems', true) || [...defaultMenuItems];
+                window.orders = window.loadData('orders', true) || [];
+                if (!Array.isArray(window.orders)) window.orders = [];
+            } catch(e) {
+                window.menuItems = [...defaultMenuItems];
+                window.orders = [];
             }
-
-            // 3. Sync Orders with change trigger alerts
-            const oldLength = Array.isArray(window.orders) ? window.orders.length : 0;
-            const incomingOrders = Array.isArray(payload.orders) ? payload.orders : [];
-
-            if (triggerChimes && incomingOrders.length > oldLength) {
-                window.playChime('new_order');
-                window.showToast("New order ticket received!", true);
-            } else if (triggerChimes) {
-                incomingOrders.forEach(newOrder => {
-                    const oldMatch = window.orders.find(o => o.id === newOrder.id);
-                    if (oldMatch && oldMatch.status !== newOrder.status) {
-                        if (newOrder.status === 'ready') {
-                            window.playChime('ready');
-                            window.showToast(`Order #${newOrder.id} is ready for pickup!`, true);
-                        } else if (newOrder.status === 'served') {
-                            window.playChime('served');
-                            window.showToast(`Order #${newOrder.id} has been served!`, true);
-                        }
-                    }
-                });
-            }
-
-            window.orders = incomingOrders;
-
-            // Sync global UI layout states
-            window.updateKitchenClosedBanner();
-            window.updateNavbarOrderBadge();
-            
-            // Local Backup
-            window.saveData('menuItems', window.menuItems);
-            window.saveData('orders', window.orders);
-
-            // Re-render
             window.renderMenu();
             window.renderAdminMenuList();
             window.renderSalesHistory();
             window.renderActiveRoleDashboards();
-            window.updateSettingsTabUI();
+            window.updateNavbarOrderBadge();
+            window.updateKitchenClosedBanner();
         }
 
+        // Push central modifications to firestore root
         window.pushDatabaseUpdates = async function() {
-            // Keep local backup safe
             window.saveData('menuItems', window.menuItems);
             window.saveData('orders', window.orders);
+            window.saveData('settings', {
+                isKitchenOpen: window.isKitchenOpen,
+                isAlertSoundEnabled: window.isAlertSoundEnabled,
+                isWhatsAppDispatchEnabled: window.isWhatsAppDispatchEnabled,
+                adminPassword: window.adminPassword
+            });
 
-            const payloadData = {
-                menuItems: window.menuItems || [],
-                orders: window.orders || [],
-                settings: {
-                    isKitchenOpen: window.isKitchenOpen,
-                    isAlertSoundEnabled: window.isAlertSoundEnabled,
-                    isWhatsAppDispatchEnabled: window.isWhatsAppDispatchEnabled,
-                    adminPassword: window.adminPassword
-                }
-            };
-
-            window.saveData('settings', payloadData.settings);
-
-            if (!window.supabaseClient) return;
-
+            if (!firebaseUser) return;
             try {
-                const { error } = await window.supabaseClient
-                    .from('restaurant_sync')
-                    .upsert({
-                        id: window.syncRoomId,
-                        payload: payloadData,
-                        updated_at: new Date().toISOString()
-                    });
-
-                if (error) throw error;
-            } catch (e) {
-                console.error("Failed syncing updates to Supabase:", e);
-                setOfflineBadge("Sync Failed");
+                const roomDocRef = doc(db, 'artifacts', window.appId, 'public', 'data', 'restaurant_dataset', 'live_doc');
+                const updatePayload = {
+                    menuItems: window.menuItems || [],
+                    orders: window.orders || [],
+                    settings: {
+                        isKitchenOpen: window.isKitchenOpen,
+                        isAlertSoundEnabled: window.isAlertSoundEnabled,
+                        isWhatsAppDispatchEnabled: window.isWhatsAppDispatchEnabled,
+                        adminPassword: window.adminPassword
+                    }
+                };
+                await setDoc(roomDocRef, updatePayload, { merge: true });
+            } catch(e) {
+                console.error("Failed writing changes to Firestore Cloud:", e);
             }
         };
 
-        // Fire Initialization early
-        window.addEventListener('DOMContentLoaded', () => {
-            initSupabase();
-        });
+        // Initialize connection
+        initFirestoreSync();
     </script>
 
     <!-- ========================================== -->
     <!--  PART 4: APP CONTROLLERS & RENDER LOOPS    -->
     <!-- ========================================== -->
     <script>
+        // Global State Declarations
+        window.isKitchenOpen = true;
+        window.isAlertSoundEnabled = true;
+        window.isWhatsAppDispatchEnabled = false;
+        window.adminPassword = '8590';
         window.itemIndexToDelete = null;
         window.currentMenuFilter = 'all';
         window.searchString = '';
+        window.orders = [];
+        window.menuItems = [];
         window.selectedItem = null;
         window.selectedQty = 1;
         window.selectedPortion = 'Q'; 
         window.selectedFlavor = 'Normal'; 
         window.selectedDineType = 'dine_in'; // dine_in OR take_away
+        window.syncRoomId = localStorage.getItem('syncRoomId') || 'DAY2DAY-PTA-8590';
+        window.activeRole = 'orders'; // POS tab controller fallback
 
         // Dine type selection state controller inside Item modal
         window.setOrderDineType = function(type) {
@@ -997,7 +1028,7 @@
             window.showAdminTab(roleKey);
         };
 
-        // Show specific tabs inside Admin Setup view
+        // Show specific tabs inside Admin Setup view (Owner Dashboard layout restored as requested)
         window.showAdminTab = function(tabName) {
             document.querySelectorAll('.admin-tab').forEach(tab => tab.classList.add('hidden'));
             const targetTab = document.getElementById('tab-' + tabName);
@@ -1105,7 +1136,7 @@
                         <h4 class="text-xl font-bold text-green-950 mt-4 mb-2 flex items-center justify-between">
                             <span>${item.displayName}</span>
                         </h4>
-                        <p class="text-sm text-gray-555 leading-relaxed min-h-[40px] line-clamp-2">${item.desc}</p>
+                        <p class="text-sm text-gray-550 leading-relaxed min-h-[40px] line-clamp-2">${item.desc}</p>
                     </div>
                     <div class="pt-6 border-t border-gray-100 flex justify-between items-center mt-6">
                         <div>
@@ -1264,7 +1295,7 @@
             if (!btnN || !btnK || !btnP) return;
 
             [btnN, btnK, btnP].forEach(btn => {
-                btn.className = "flavor-option-btn py-2.5 rounded-lg font-bold text-xs transition focus:outline-none text-center bg-transparent text-gray-655 hover:bg-gray-200/60";
+                btn.className = "flavor-option-btn py-2.5 rounded-lg font-bold text-xs transition focus:outline-none text-center bg-transparent text-gray-650 hover:bg-gray-200/60";
             });
 
             let activeBtn;
@@ -1295,7 +1326,7 @@
             if (!btnQ || !btnH || !btnF) return;
 
             [btnQ, btnH, btnF].forEach(btn => {
-                btn.className = "py-2.5 rounded-lg font-bold text-xs transition duration-200 text-center bg-transparent text-gray-655 hover:bg-gray-200/60";
+                btn.className = "py-2.5 rounded-lg font-bold text-xs transition duration-200 text-center bg-transparent text-gray-650 hover:bg-gray-200/60";
             });
 
             const activeBtn = document.getElementById(`portion-btn-${portion}`);
@@ -1676,7 +1707,7 @@
         };
 
         // ==========================================
-        //  ADMIN CATALOGS RENDERING 
+        //  ADMIN CATALOGS RENDERING (RESTORED FEATS)
         // ==========================================
         window.renderAdminMenuList = function() {
             const list = document.getElementById('admin-menu-list');
@@ -1905,56 +1936,11 @@
             const soundBtnClass = window.isAlertSoundEnabled ? "bg-green-600 hover:bg-green-700 text-white" : "bg-gray-500 hover:bg-gray-655 text-white";
             const waBtnClass = window.isWhatsAppDispatchEnabled ? "bg-green-600 hover:bg-green-700 text-white" : "bg-gray-500 hover:bg-gray-655 text-white";
 
-            // Determine Supabase client connection states
-            const supabaseStatusText = window.supabaseClient 
-                ? "🟢 Supabase Connected and Syncing" 
-                : "⚠️ Supabase offline / Not configured yet";
-
             settingsTab.innerHTML = `
                 <div class="bg-white p-6 md:p-8 rounded-3xl shadow-xl max-w-2xl mx-auto border space-y-8">
                     <div>
-                        <h3 class="text-2xl font-bold text-gray-800 mb-1">Kitchen & Operational Control</h3>
-                        <p class="text-sm text-gray-550">Configure client-facing business operations, custom notification alerts, and security details.</p>
-                    </div>
-
-                    <!-- Supabase Connection Config Core Module -->
-                    <div class="bg-indigo-50 p-6 rounded-2xl border border-indigo-200 space-y-4">
-                        <div class="flex items-center justify-between">
-                            <span class="font-bold text-indigo-950 text-base flex items-center gap-1.5">⚡ Supabase Database Connection</span>
-                            <span class="text-xs font-bold ${window.supabaseClient ? 'text-green-700' : 'text-red-700'}">${supabaseStatusText}</span>
-                        </div>
-                        <p class="text-xs text-indigo-800 leading-relaxed">
-                            Supabase provides lightning-fast real-time synchronization between your Cash Counter, Kitchen tablet, and customer menu orders.
-                        </p>
-                        <div class="space-y-3">
-                            <div>
-                                <label class="block text-xs font-bold text-indigo-900 uppercase mb-1">Supabase Project URL</label>
-                                <input type="text" id="supabase-url-input" value="${window.supabaseUrl}" placeholder="https://your-project.supabase.co" class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none bg-white font-mono">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-indigo-900 uppercase mb-1">Supabase Anon Public API Key</label>
-                                <input type="password" id="supabase-key-input" value="${window.supabaseAnonKey}" placeholder="eyJhbGciOi..." class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none bg-white font-mono">
-                            </div>
-                            <div class="flex gap-2 justify-end pt-1">
-                                <button onclick="saveSupabaseSettings()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-5 py-2 rounded-xl font-bold transition shadow-sm">
-                                    Save & Connect Database
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Expandable DB Schema creation script -->
-                        <details class="bg-white/50 border border-indigo-150 p-3 rounded-xl">
-                            <summary class="text-xs font-bold text-indigo-900 cursor-pointer select-none">🛠️ Database SQL Schema (Click to copy)</summary>
-                            <div class="mt-2 text-[10px] bg-slate-900 text-emerald-400 p-3 rounded font-mono overflow-x-auto whitespace-pre">create table restaurant_sync (
-  id text primary key,
-  payload jsonb not null,
-  updated_at timestamp with time zone default now() not null
-);
-
--- Enable Realtime
-alter table restaurant_sync replica identity full;</div>
-                            <p class="text-[10px] text-indigo-700 mt-2">Just execute this script inside your Supabase <strong>SQL Editor</strong>, and ensure Realtime is toggled on for your table!</p>
-                        </details>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-1">Kitchen & Security Control Panel</h3>
+                        <p class="text-sm text-gray-550">Configure client-facing business operations, sync keys, notification sound, and security details.</p>
                     </div>
                     
                     <div class="space-y-6 border-t pt-6">
@@ -2036,24 +2022,6 @@ alter table restaurant_sync replica identity full;</div>
             `;
         };
 
-        window.saveSupabaseSettings = function() {
-            const urlInput = document.getElementById('supabase-url-input');
-            const keyInput = document.getElementById('supabase-key-input');
-            if (urlInput && keyInput) {
-                const url = urlInput.value.trim();
-                const key = keyInput.value.trim();
-                
-                window.supabaseUrl = url;
-                window.supabaseAnonKey = key;
-                
-                localStorage.setItem('supabaseUrl', url);
-                localStorage.setItem('supabaseAnonKey', key);
-                
-                showToast("Supabase credentials saved! Initializing Connection...", true);
-                initSupabase();
-            }
-        };
-
         window.toggleKitchenStatus = function() {
             window.isKitchenOpen = !window.isKitchenOpen;
             if (window.pushDatabaseUpdates) window.pushDatabaseUpdates();
@@ -2079,8 +2047,8 @@ alter table restaurant_sync replica identity full;</div>
                 if (newId) {
                     window.syncRoomId = newId;
                     localStorage.setItem('syncRoomId', newId);
-                    showToast(`Sync Room ID updated to: ${newId}! Reconnecting...`, true);
-                    setupSupabaseSync();
+                    window.appId = newId.toLowerCase();
+                    showToast(`Sync Room ID updated to: ${newId}! Please refresh to re-establish network connection.`, true);
                 }
             }
         };
@@ -2298,7 +2266,7 @@ alter table restaurant_sync replica identity full;</div>
             window.showToast(`Payment status updated to ${nextState}!`, true);
         };
 
-        // Advance order ticket states
+        // Added the missing advanceOrderStatus function to fix ReferenceError
         window.advanceOrderStatus = function(ids, status) {
             const idArray = Array.isArray(ids) ? ids : [ids];
             window.orders.forEach(o => {
